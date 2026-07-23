@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitoring Rekap Sisa Saldo Dealer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+
+  /* ============================================================
+     CARA MENGATUR PASSWORD & LINK SPREADSHEET
+     Cari blok "const DEPARTMENTS" di bagian <script> paling bawah.
+     Ganti "password" dan "sheetUrl" masing-masing departemen di sana.
+
+     CARA MENGATUR SUMBER DATA "REKAP KESELURUHAN SISA SALDO"
+     Data TIDAK LAGI hardcode. Dashboard menarik data LIVE dari Google
+     Sheet setiap department setiap kali menu "Rekap Keseluruhan"
+     dibuka (dan saat tombol "Refresh" ditekan), lewat blok
+     "const SHEET_CATEGORIES" di bagian <script>. Untuk menambah/ubah
+     kategori, sheet sumber, atau spreadsheet ID, edit array tsb.
+
+     PRASYARAT WAJIB: setiap Google Sheet sumber (Admin, Claim,
+     Marketing, TSD) harus di-set ke mode "Anyone with the link can
+     view" (Share > General access), atau di-publish lewat
+     File > Share > Publish to web. Tanpa ini, fetch akan gagal dan
+     kategori terkait akan menampilkan pesan error (dashboard tidak
+     akan mati total, hanya kategori tsb yang gagal).
+     ============================================================ */
+
+  :root{
+    --bg:        #ffeef4;
+    --blush-100: #ffeef3;
+    --blush-200: #ffdce7;
+    --pink-400:  #ff9fbb;
+    --pink-500:  #ff6f9c;
+    --pink-600:  #f2447f;
+    --magenta:   #c81d6c;
+    --plum:      #5c1440;
+    --plum-800:  #47103a;
+    --ink:       #34212c;
+    --ink-soft:  #7a5f6b;
+    --white:     #ffffff;
+    --green:     #2f9e63;
+    --red:       #d1394f;
+    --font-display: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+    --font-body: 'Inter', 'Segoe UI', sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  }
+
+  html, body{
+    margin:0; padding:0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  body{
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  .blob{
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(60px);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .blob-1{
+    width: 480px; height: 480px;
+    top: -180px; left: -160px;
+    background: radial-gradient(circle, var(--pink-400) 0%, transparent 70%);
+    opacity: 0.55;
+  }
+  .blob-2{
+    width: 420px; height: 420px;
+    bottom: -160px; right: -140px;
+    background: radial-gradient(circle, var(--pink-500) 0%, transparent 70%);
+    opacity: 0.45;
+  }
+  .blob-3{
+    width: 300px; height: 300px;
+    top: 30%; right: 8%;
+    background: radial-gradient(circle, var(--blush-200) 0%, transparent 70%);
+    opacity: 0.7;
+  }
+
+  .wrap{
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 60px 24px 84px;
+  }
+
+  header{
+    display:flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 52px;
+    padding-bottom: 34px;
+    border-bottom: 2px solid var(--blush-200);
+  }
+
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    background: linear-gradient(135deg, var(--pink-500), var(--magenta));
+    color: var(--white);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 7px 14px 7px 10px;
+    border-radius: 999px;
+    box-shadow: 0 6px 16px rgba(200, 29, 108, 0.28);
+  }
+  .chip .pulse{
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 0 rgba(255,255,255,0.7);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse{
+    0%{ box-shadow: 0 0 0 0 rgba(255,255,255,0.6); }
+    70%{ box-shadow: 0 0 0 8px rgba(255,255,255,0); }
+    100%{ box-shadow: 0 0 0 0 rgba(255,255,255,0); }
+  }
+
+  h1{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(32px, 5vw, 52px);
+    line-height: 1.08;
+    margin: 0;
+    letter-spacing: -0.015em;
+    background: linear-gradient(100deg, var(--plum) 0%, var(--magenta) 55%, var(--pink-500) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .subtitle{
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--ink-soft);
+    max-width: 620px;
+    margin: 0;
+  }
+
+  .status-row{
+    margin-top: 4px;
+    display:flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .status-row .dot{ color: var(--green); }
+
+  .grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 22px;
+  }
+
+  @media (max-width: 680px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    position: relative;
+    background: var(--white);
+    border: 1px solid var(--blush-200);
+    border-radius: 20px;
+    padding: 30px 28px 26px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
+    text-align: left;
+    display:flex;
+    flex-direction: column;
+    gap: 18px;
+    box-shadow: 0 4px 14px rgba(92, 20, 64, 0.06);
+  }
+
+  .card::after{
+    content:"";
+    position:absolute;
+    top: -60px; right: -60px;
+    width: 160px; height: 160px;
+    border-radius: 50%;
+    background: var(--accent-soft, var(--blush-100));
+    transition: transform 0.3s ease;
+    z-index: 0;
+  }
+
+  .card:hover::after{ transform: scale(1.25); }
+
+  .card:hover{
+    border-color: transparent;
+    transform: translateY(-5px);
+    box-shadow: 0 22px 40px rgba(92, 20, 64, 0.16);
+  }
+
+  .card:focus-visible{
+    outline: 2px solid var(--pink-600);
+    outline-offset: 3px;
+  }
+
+  .card-top{
+    position: relative;
+    z-index: 1;
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .icon-badge{
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: linear-gradient(135deg, var(--accent-1, #ff6f9c), var(--accent-2, #c81d6c));
+    color: #fff;
+    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(200,29,108,0.5));
+    flex-shrink: 0;
+  }
+
+  .code-stamp{
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--accent-2, var(--magenta));
+    background: var(--accent-soft, var(--blush-100));
+    border-radius: 999px;
+    padding: 5px 12px;
+    align-self: flex-start;
+  }
+
+  .card h2{
+    position: relative;
+    z-index: 1;
+    font-family: var(--font-display);
+    font-size: 23px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--ink);
+  }
+
+  .card p{
+    position: relative;
+    z-index: 1;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .card-footer{
+    position: relative;
+    z-index: 1;
+    margin-top: auto;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    padding-top: 16px;
+    border-top: 1px dashed var(--blush-200);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .card-footer .go{
+    color: #fff;
+    background: linear-gradient(135deg, var(--accent-1, #ff6f9c), var(--accent-2, #c81d6c));
+    display:flex;
+    align-items:center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 12.5px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .card:hover .go{
+    transform: translateX(2px);
+    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(200,29,108,0.5));
+  }
+
+  footer.page-footer{
+    position: relative;
+    z-index: 1;
+    margin-top: 56px;
+    padding: 18px 22px;
+    background: var(--white);
+    border: 1px solid var(--blush-200);
+    border-radius: 14px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+  }
+
+  .overlay{
+    position: fixed;
+    inset: 0;
+    background: rgba(71, 16, 58, 0.35);
+    backdrop-filter: blur(4px);
+    display:flex;
+    align-items:center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+  }
+
+  .overlay.open{ opacity: 1; pointer-events: auto; }
+
+  .modal{
+    width: 100%;
+    max-width: 390px;
+    background: var(--white);
+    border-radius: 20px;
+    padding: 32px 28px 28px;
+    position: relative;
+    box-shadow: 0 30px 60px rgba(71, 16, 58, 0.28);
+    transform: translateY(10px) scale(0.98);
+    transition: transform 0.18s ease;
+  }
+
+  .overlay.open .modal{ transform: translateY(0) scale(1); }
+
+  .modal.shake{ animation: shake 0.4s; }
+
+  @keyframes shake{
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
+
+  .modal-close{
+    position: absolute;
+    top: 16px; right: 16px;
+    background: var(--blush-100);
+    border: none;
+    color: var(--ink-soft);
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .modal-close:hover{ background: var(--blush-200); color: var(--ink); }
+
+  .modal-icon{
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color: #fff;
+    margin-bottom: 16px;
+    background: linear-gradient(135deg, var(--accent-1, #ff6f9c), var(--accent-2, #c81d6c));
+    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(200,29,108,0.5));
+  }
+
+  .modal h3{
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: var(--ink);
+  }
+
+  .modal p.hint{
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin: 0 0 20px;
+    line-height: 1.5;
+  }
+
+  .field-label{
+    display:block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+
+  .pw-field{
+    position: relative;
+    display:flex;
+    align-items:center;
+  }
+
+  .pw-input{
+    width: 100%;
+    background: var(--blush-100);
+    border: 1.5px solid var(--blush-200);
+    border-radius: 10px;
+    padding: 13px 46px 13px 14px;
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 15px;
+    letter-spacing: 0.03em;
+    outline: none;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .pw-input:focus{ border-color: var(--pink-500); background: var(--white); }
+
+  .pw-toggle{
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink-soft);
+    padding: 8px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius: 8px;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .pw-toggle:hover{ color: var(--magenta); background: var(--blush-200); }
+  .pw-toggle svg{ display:block; }
+  .pw-toggle .eye-off{ display:none; }
+  .pw-toggle.showing .eye{ display:none; }
+  .pw-toggle.showing .eye-off{ display:block; }
+
+  .error-msg{
+    color: var(--red);
+    font-size: 12.5px;
+    margin-top: 10px;
+    min-height: 16px;
+    font-family: var(--font-mono);
+  }
+
+  .success-msg{
+    color: var(--green);
+    font-size: 12.5px;
+    margin-top: 10px;
+    min-height: 16px;
+    font-family: var(--font-mono);
+  }
+
+  .submit-btn{
+    width: 100%;
+    margin-top: 18px;
+    background: linear-gradient(135deg, var(--pink-500), var(--magenta));
+    color: var(--white);
+    border: none;
+    border-radius: 10px;
+    padding: 13px 14px;
+    font-family: var(--font-body);
+    font-weight: 700;
+    font-size: 14.5px;
+    cursor: pointer;
+    box-shadow: 0 10px 20px -8px rgba(200, 29, 108, 0.55);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .submit-btn:hover{ transform: translateY(-1px); box-shadow: 0 14px 26px -8px rgba(200, 29, 108, 0.6); }
+
+  .submit-btn:disabled{
+    opacity: 0.6;
+    cursor: default;
+    transform: none;
+  }
+
+  /* ===== Modal Rekap Keseluruhan ===== */
+
+  .summary-modal{
+    width: 100%;
+    max-width: 1080px;
+    max-height: 88vh;
+    background: var(--white);
+    border-radius: 20px;
+    padding: 26px 26px 20px;
+    position: relative;
+    box-shadow: 0 30px 60px rgba(71, 16, 58, 0.28);
+    transform: translateY(10px) scale(0.98);
+    transition: transform 0.18s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .overlay.open .summary-modal{ transform: translateY(0) scale(1); }
+
+  .summary-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding-right: 34px;
+  }
+
+  .summary-head h3{
+    font-family: var(--font-display);
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+
+  .summary-head p{
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin: 0;
+    max-width: 560px;
+    line-height: 1.5;
+  }
+
+  .summary-stats{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .summary-stat{
+    background: var(--blush-100);
+    border: 1px solid var(--blush-200);
+    border-radius: 12px;
+    padding: 8px 14px;
+    text-align: center;
+    min-width: 128px;
+  }
+
+  .summary-stat .num{
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--magenta);
+    display:block;
+  }
+
+  .summary-stat .lbl{
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    letter-spacing: 0.03em;
+  }
+
+  .summary-toolbar{
+    display:flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items:center;
+  }
+
+  .summary-search{
+    flex: 1;
+    min-width: 200px;
+    background: var(--blush-100);
+    border: 1.5px solid var(--blush-200);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    color: var(--ink);
+    outline: none;
+  }
+  .summary-search:focus{ border-color: var(--pink-500); background: var(--white); }
+
+  .summary-btn{
+    background: linear-gradient(135deg, var(--pink-500), var(--magenta));
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .summary-btn:hover{ filter: brightness(1.05); }
+
+  .summary-table-wrap{
+    flex: 1;
+    overflow: auto;
+    border: 1px solid var(--blush-200);
+    border-radius: 14px;
+  }
+
+  table.summary-table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    font-family: var(--font-mono);
+  }
+
+  table.summary-table thead th{
+    position: sticky;
+    top: 0;
+    background: var(--plum);
+    color: #fff;
+    text-align: left;
+    padding: 10px 12px;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    z-index: 1;
+  }
+
+  table.summary-table th.num, table.summary-table td.num{ text-align: right; }
+
+  table.summary-table td{
+    padding: 8px 12px;
+    border-top: 1px solid var(--blush-100);
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  table.summary-table tbody tr:nth-child(even){ background: #fffafb; }
+  table.summary-table tbody tr:hover{ background: var(--blush-100); }
+
+  table.summary-table tfoot td{
+    padding: 12px;
+    font-weight: 700;
+    background: var(--blush-200);
+    color: var(--plum-800);
+    position: sticky;
+    bottom: 0;
+    border-top: 2px solid var(--magenta);
+  }
+
+  .summary-empty{
+    padding: 30px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-family: var(--font-body);
+    font-size: 13px;
+  }
+
+  .summary-download-box{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    background: linear-gradient(135deg, #fff2f6, #ffe3ee);
+    border: 1.5px solid var(--blush-200);
+    border-radius: 14px;
+    padding: 14px 18px;
+  }
+
+  .summary-download-text{
+    display:flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .summary-download-text strong{
+    font-family: var(--font-display);
+    font-size: 16px;
+    color: var(--ink);
+  }
+
+  .summary-download-text span{
+    font-size: 12px;
+    color: var(--ink-soft);
+    max-width: 480px;
+    line-height: 1.45;
+  }
+
+  .summary-excel-updated{
+    font-family: var(--font-mono);
+    font-size: 10.5px !important;
+    color: var(--magenta) !important;
+    opacity: 0.85;
+  }
+
+  .summary-btn-main{
+    flex-shrink: 0;
+    font-size: 13.5px;
+    padding: 11px 20px;
+  }
+
+  .summary-tabs-hint{
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    margin: -6px 0 0;
+  }
+
+  .summary-tabs{
+    display:flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding-bottom: 2px;
+  }
+
+  .summary-tab{
+    background: var(--blush-100);
+    border: 1.5px solid var(--blush-200);
+    color: var(--ink-soft);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-family: var(--font-body);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+  }
+
+  .summary-tab .dept-tag{
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    opacity: 0.75;
+    margin-left: 4px;
+  }
+
+  .summary-tab:hover{ background: var(--blush-200); }
+
+  .summary-tab.active{
+    background: linear-gradient(135deg, var(--pink-500), var(--magenta));
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 6px 14px -6px rgba(200, 29, 108, 0.5);
+  }
+
+  .summary-tab.no-data{
+    opacity: 0.6;
+  }
+
+  .summary-errors{
+    background: #fff2f2;
+    border: 1.5px solid #ffc9c9;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--red);
+    line-height: 1.6;
+  }
+  .summary-errors strong{ display:block; margin-bottom: 4px; }
+  .summary-errors a{ color: var(--magenta); font-weight: 600; }
+
+  .summary-loading-box{
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: 13px;
+  }
+
+  table.summary-table.matrix-view td, table.summary-table.matrix-view th{
+    padding: 8px 9px;
+    font-size: 11.5px;
+  }
+  table.summary-table td.total-col, table.summary-table th.total-col{
+    background: var(--blush-100);
+    font-weight: 700;
+  }
+
+  .summary-noData-box{
+    padding: 46px 24px;
+    text-align: center;
+    border: 1.5px dashed var(--blush-200);
+    border-radius: 14px;
+    background: var(--blush-100);
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+
+  .summary-noData-box strong{
+    display:block;
+    color: var(--ink);
+    font-family: var(--font-display);
+    font-size: 17px;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+
+  .summary-note{
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+
+  @media (max-width: 720px){
+    .summary-modal{ padding: 20px 16px 16px; max-height: 92vh; }
+    .summary-head{ flex-direction: column; }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<div class="wrap">
+
+  <header>
+    <span class="chip"><span class="pulse"></span> Live Monitoring</span>
+    <h1>Monitoring Rekap Sisa Saldo Dealer</h1>
+    <p class="subtitle">
+      Portal akses ke spreadsheet sisa saldo bonus dealer per departemen. Pilih departemen,
+      masukkan kata sandi yang berlaku, dan Anda akan diarahkan langsung ke spreadsheet
+      terkait secara realtime. Tersedia juga rekap keseluruhan sisa saldo seluruh dealer
+      tanpa perlu membuka satu per satu spreadsheet departemen.
+    </p>
+    <div class="status-row">
+      <span><span class="dot">●</span> 4 departemen + 1 rekap keseluruhan</span>
+      <span id="lastVisitInfo">Belum ada akses pada sesi ini</span>
+    </div>
+  </header>
+
+  <div class="grid" id="cardGrid"></div>
+
+  <footer class="page-footer">
+    Setiap departemen memiliki kata sandi masing-masing dan hanya mengarah ke spreadsheet
+    miliknya sendiri. Kata sandi tidak disimpan di browser &mdash; setiap kunjungan baru akan
+    diminta memasukkan kata sandi kembali.
+  </footer>
+
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal">
+    <button class="modal-close" id="modalClose" aria-label="Tutup">&times;</button>
+    <div class="modal-icon" id="modalIcon"></div>
+    <span class="code-stamp" id="modalCode" style="margin-bottom:12px;">---</span>
+    <h3 id="modalTitle">Departemen</h3>
+    <p class="hint">Masukkan kata sandi departemen untuk membuka spreadsheet sisa saldo bonus dealer.</p>
+    <form id="pwForm">
+      <label class="field-label" for="pwInput">Kata Sandi</label>
+      <div class="pw-field">
+        <input class="pw-input" type="password" id="pwInput" autocomplete="off" placeholder="••••••••" />
+        <button type="button" class="pw-toggle" id="pwToggle" aria-label="Tampilkan kata sandi">
+          <svg class="eye" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-7.5 11-7.5S23 12 23 12s-4 7.5-11 7.5S1 12 1 12z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <svg class="eye-off" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19.5C5 19.5 1 12 1 12a19.4 19.4 0 0 1 4.22-5.61M9.9 4.24A10.4 10.4 0 0 1 12 4.5c7 0 11 7.5 11 7.5a19.5 19.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+            <path d="M1 1l22 22"/>
+          </svg>
+        </button>
+      </div>
+      <div class="error-msg" id="errorMsg"></div>
+      <div class="success-msg" id="successMsg"></div>
+      <button type="submit" class="submit-btn" id="submitBtn">Buka Spreadsheet</button>
+    </form>
+  </div>
+</div>
+
+<div class="overlay" id="summaryOverlay">
+  <div class="summary-modal" id="summaryModal">
+    <button class="modal-close" id="summaryClose" aria-label="Tutup">&times;</button>
+    <div class="summary-head">
+      <div>
+        <h3>Rekap Keseluruhan Sisa Saldo Dealer</h3>
+        <p>Tarikan data lengkap sisa saldo, dipisah per jenis bonus/skema dalam beberapa sheet, digabung dari seluruh departemen.</p>
+      </div>
+      <div class="summary-stats">
+        <div class="summary-stat">
+          <span class="num" id="statDealerCount">-</span>
+          <span class="lbl">Dealer</span>
+        </div>
+        <div class="summary-stat">
+          <span class="num" id="statGrandTotal">-</span>
+          <span class="lbl">Total Sheet Ini</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-download-box">
+      <div class="summary-download-text">
+        <strong>Data Live dari Google Sheets</strong>
+        <span>Ditarik otomatis dari 13 kategori (Admin, Claim, Marketing, TSD) setiap kali modal ini dibuka. Klik "Refresh" untuk menarik ulang data terbaru.</span>
+        <span class="summary-excel-updated" id="excelUpdatedAt">Terakhir diperbarui: -</span>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="summary-btn" id="summaryRefreshBtn">⟳ Refresh</button>
+        <button type="button" class="summary-btn summary-btn-main" id="summaryDownloadExcelBtn">⬇ Unduh Excel Lengkap</button>
+      </div>
+    </div>
+
+    <div class="summary-tabs" id="summaryTabs"></div>
+    <div id="summaryErrors" style="display:none;"></div>
+
+    <p class="summary-tabs-hint">Tab "Matrix (Semua Kategori)" menampilkan tabel gabungan seperti Excel (13 kolom kategori + TOTAL). Tab lain untuk lihat cepat 1 kategori saja, dengan pencarian &amp; export CSV.</p>
+
+    <div class="summary-toolbar">
+      <input type="text" class="summary-search" id="summarySearch" placeholder="Cari nama dealer atau kode dealer...">
+      <button type="button" class="summary-btn" id="summaryCsvBtn">Unduh CSV</button>
+    </div>
+    <div class="summary-table-wrap">
+      <table class="summary-table" id="summaryTable">
+        <thead>
+          <tr id="summaryTheadRow">
+            <th>No</th>
+            <th>Kode Dealer</th>
+            <th>Nama Dealer</th>
+            <th class="num" id="summaryValueHeader">Sisa Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="summaryTbody"></tbody>
+        <tfoot>
+          <tr id="summaryTfootRow">
+            <td colspan="3">TOTAL SHEET INI</td>
+            <td class="num" id="summaryFootTotal">-</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <p class="summary-note" id="summaryNote">Memuat data...</p>
+  </div>
+</div>
+
+<script>
+
+  /* ============================================================
+     SPREADSHEET SUMBER (per departemen)
+     ID diambil dari URL Google Sheet masing-masing departemen.
+     Sheet sumber WAJIB "Anyone with the link - Viewer" agar fetch
+     live berhasil (lihat catatan prasyarat di bagian atas file).
+     ============================================================ */
+  const SPREADSHEET_IDS = {
+    admin: "19o_zDnZHaR_1aF3rnl94P4jzLWyrSAesOZbOWa2Us3g",
+    claim: "1V--_7K0XEx66d3ouiCQe1OcJd4A29U0QPwN94gnKgNk",
+    marketing: "1IYwT36YzxUMlh36SApJU1rXUNUwJ-I5aPk4nV3670lY",
+    tsd: "1WXf8n_QchaOQ0o_vvhvC0M4BYwdQKb6-i8kUp3TR4RI"
+  };
+
+  const DEPT_LABEL = { admin: "Admin", claim: "Claim", marketing: "Marketing", tsd: "TSD" };
+
+  /* ============================================================
+     DAFTAR 13 KATEGORI REKAP KESELURUHAN
+     dept      : kunci ke SPREADSHEET_IDS (departemen sumber)
+     sheetName : nama sheet/tab persis di spreadsheet sumber
+     asIs      : true = sheet sumber SUDAH berupa rekap sisa saldo
+                 final -> tampilkan apa adanya, jangan dijumlah ulang
+                 per baris duplikat (ambil nilai terakhir).
+                 false = boleh dijumlahkan bila ada baris duplikat
+                 per dealer (data mentah/transaksi).
+     ============================================================ */
+  const SHEET_CATEGORIES = [
+    { id: "bsistem",   label: "1. Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: false },
+    { id: "btactical", label: "2. Bonus Tactical",     dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
+    { id: "bdev",      label: "3. Bonus Development",  dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
+    { id: "pxp1",      label: "4. Pengembalian XP1",   dept: "claim",     sheetName: "Pengembalian XP1",        asIs: true  },
+    { id: "xp1",       label: "5. XP1",                dept: "claim",     sheetName: "XP1",                     asIs: false },
+    { id: "xp23",      label: "6. XP2 & XP3",          dept: "admin",     sheetName: "XP2 XP3",                 asIs: false },
+    { id: "scp",       label: "7. SCP",                dept: "claim",     sheetName: "SCP",                     asIs: false },
+    { id: "dg",        label: "8. DG",                 dept: "claim",     sheetName: "DG",                      asIs: false },
+    { id: "gc",        label: "9. GC",                 dept: "claim",     sheetName: "GC",                      asIs: false },
+    { id: "kpb",       label: "10. KPB",               dept: "claim",     sheetName: "KPB",                     asIs: false },
+    { id: "btl",       label: "11. BTL",               dept: "claim",     sheetName: "BTL",                     asIs: false },
+    { id: "lcr",       label: "12. LCR",               dept: "claim",     sheetName: "LCR",                     asIs: false },
+    { id: "ahass",     label: "13. Bonus AHASS",       dept: "tsd",       sheetName: "Sisa Saldo",              asIs: true  }
+  ];
+
+  const MATRIX_ID = "matrix";
+
+  let activeCategory = MATRIX_ID;
+  let liveDealerRows = [];       // union rows built from fetched sheets: { kode, dealer, values:{catId: number}, total }
+  let categoryErrors = [];       // [{ catId, label, message }]
+  let lastFetchedAt = null;
+  let isFetching = false;
+
+  /* ============================================================
+     UTIL: normalisasi nama dealer utk fallback matching
+     (trim spasi, uppercase) — dipakai kalau Kode Dealer kosong
+     atau "Manual".
+     ============================================================ */
+  function normalizeDealerName(name){
+    return (name || "").toString().trim().replace(/\s+/g, " ").toUpperCase();
+  }
+
+  function isUsableKode(kode){
+    const k = (kode || "").toString().trim();
+    if (!k) return false;
+    if (k.toUpperCase() === "MANUAL") return false;
+    return true;
+  }
+
+  /* ============================================================
+     UTIL: parse angka dari sel CSV Google Sheets.
+     Menangani: kosong -> 0, format ribuan/desimal Indonesia atau
+     internasional, tanda kurung utk negatif, dan simbol mata uang.
+     Desimal kecil (mis. -0.48) HARUS tetap terbaca, tidak dibulatkan.
+     ============================================================ */
+  function parseSheetNumber(raw){
+    if (raw === null || raw === undefined) return 0;
+    let s = String(raw).trim();
+    if (s === "" || s === "-") return 0;
+    let negative = false;
+    if (/^\(.*\)$/.test(s)){ negative = true; s = s.slice(1, -1); }
+    s = s.replace(/[Rr]p\.?/g, "").replace(/[^0-9,.\-]/g, "");
+    if (s === "" || s === "-") return 0;
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    if (lastComma > -1 && lastDot > -1){
+      if (lastComma > lastDot){
+        s = s.replace(/\./g, "").replace(",", ".");
+      } else {
+        s = s.replace(/,/g, "");
+      }
+    } else if (lastComma > -1){
+      const decLen = s.length - lastComma - 1;
+      if (decLen === 3 && (s.match(/,/g) || []).length === 1 && s.indexOf(",") !== 0){
+        // kemungkinan pemisah ribuan tunggal, mis. "1,234" -> ambigu;
+        // perlakukan sbg desimal hanya jika <=2 digit di belakang koma
+        s = s.replace(/,/g, "");
+      } else {
+        s = s.replace(/,/g, ".");
+      }
+    }
+    let n = parseFloat(s);
+    if (isNaN(n)) n = 0;
+    if (negative) n = -n;
+    return n;
+  }
+
+  function csvUrlFor(spreadsheetId, sheetName){
+    return "https://docs.google.com/spreadsheets/d/" + spreadsheetId +
+      "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(sheetName);
+  }
+
+  /* ============================================================
+     Ambil & parse 1 sheet sumber -> array baris {kode, dealer, value}
+     Auto-deteksi baris header (dicari baris yang punya kolom
+     mengandung kata "dealer") dan kolom kode/dealer/nilai.
+     ============================================================ */
+  async function fetchCategorySheet(cat){
+    const spreadsheetId = SPREADSHEET_IDS[cat.dept];
+    const url = csvUrlFor(spreadsheetId, cat.sheetName);
+    let res;
+    try {
+      res = await fetch(url, { credentials: "omit" });
+    } catch (networkErr){
+      if (location.protocol === "file:"){
+        throw new Error("Gagal konek: file dibuka langsung (file://). Buka index.html lewat web server/hosting (mis. GitHub Pages, Netlify, atau 'python -m http.server'), bukan double-click file.");
+      }
+      throw new Error("Gagal konek ke Google Sheets (cek internet, atau ada extension/adblocker yang memblokir docs.google.com)");
+    }
+    if (!res.ok){
+      if (res.status === 400 || res.status === 404){
+        throw new Error("Sheet/tab \"" + cat.sheetName + "\" tidak ditemukan di spreadsheet ini (cek nama tab persis sama)");
+      }
+      throw new Error("HTTP " + res.status + " saat mengambil sheet");
+    }
+    const text = await res.text();
+    if (/^\s*<(!DOCTYPE|html)/i.test(text)){
+      throw new Error("Sheet belum bisa diakses publik. Set Share > General access ke 'Anyone with the link - Viewer'");
+    }
+    const parsed = Papa.parse(text.trim(), { skipEmptyLines: true });
+    const table = parsed.data;
+    if (!table || table.length === 0){
+      throw new Error("Sheet/tab \"" + cat.sheetName + "\" kosong atau tidak ditemukan");
+    }
+
+    let headerIdx = -1, kodeIdx = -1, dealerIdx = -1, valueIdx = -1;
+    for (let i = 0; i < Math.min(table.length, 8); i++){
+      const row = table[i].map(c => (c || "").toString().toLowerCase());
+      const dIdx = row.findIndex(c => c.includes("dealer") && !c.includes("kode"));
+      if (dIdx > -1){
+        headerIdx = i;
+        dealerIdx = dIdx;
+        kodeIdx = row.findIndex(c => c.includes("kode"));
+        const valCandidates = row
+          .map((c, idx) => ({ idx, c }))
+          .filter(o => /saldo|total|jumlah|nominal|nilai/.test(o.c));
+        if (valCandidates.length){
+          const sisa = valCandidates.find(o => o.c.includes("sisa"));
+          valueIdx = (sisa || valCandidates[valCandidates.length - 1]).idx;
+        }
+        break;
+      }
+    }
+    if (headerIdx === -1){
+      throw new Error("Header (kolom Dealer) tidak ditemukan di \"" + cat.sheetName + "\"");
+    }
+    if (valueIdx === -1){
+      // fallback: kolom numerik terakhir pada baris header (paling kanan)
+      valueIdx = table[headerIdx].length - 1;
+    }
+
+    const out = [];
+    for (let i = headerIdx + 1; i < table.length; i++){
+      const row = table[i];
+      if (!row || row.every(c => (c || "").toString().trim() === "")) continue;
+      const dealerName = (row[dealerIdx] || "").toString().trim();
+      if (!dealerName) continue;
+      const kode = kodeIdx > -1 ? (row[kodeIdx] || "").toString().trim() : "";
+      const value = parseSheetNumber(row[valueIdx]);
+      out.push({ kode, dealer: dealerName, value });
+    }
+    return out;
+  }
+
+  /* ============================================================
+     Gabungkan semua kategori jadi 1 union dealer list, dicocokkan
+     via Kode Dealer (fallback: nama dealer dinormalisasi kalau
+     kode kosong/"Manual").
+     ============================================================ */
+  function buildLiveRows(perCategoryRows){
+    const registry = new Map(); // matchKey -> { kode, dealer, values:{} }
+    const order = [];
+
+    SHEET_CATEGORIES.forEach(cat => {
+      const rows = perCategoryRows[cat.id];
+      if (!rows) return;
+      const sumByKey = new Map();
+      rows.forEach(r => {
+        const useKode = isUsableKode(r.kode);
+        const matchKey = useKode ? ("K:" + r.kode.trim().toUpperCase()) : ("N:" + normalizeDealerName(r.dealer));
+        if (!registry.has(matchKey)){
+          registry.set(matchKey, {
+            kode: useKode ? r.kode.trim() : "",
+            dealer: r.dealer.trim(),
+            values: {}
+          });
+          order.push(matchKey);
+        } else {
+          const entry = registry.get(matchKey);
+          if (!entry.kode && useKode) entry.kode = r.kode.trim();
+        }
+        if (cat.asIs){
+          // ambil apa adanya: kalau ada duplikat baris, pakai yang terakhir
+          sumByKey.set(matchKey, r.value);
+        } else {
+          sumByKey.set(matchKey, (sumByKey.get(matchKey) || 0) + r.value);
+        }
+      });
+      sumByKey.forEach((val, key) => {
+        registry.get(key).values[cat.id] = val;
+      });
+    });
+
+    return order.map(key => {
+      const entry = registry.get(key);
+      let total = 0;
+      SHEET_CATEGORIES.forEach(cat => { total += entry.values[cat.id] || 0; });
+      return { kode: entry.kode, dealer: entry.dealer, values: entry.values, total };
+    });
+  }
+
+  async function fetchAllData(){
+    if (isFetching) return;
+    isFetching = true;
+    categoryErrors = [];
+    renderSummaryErrors();
+    const perCategoryRows = {};
+
+    await Promise.all(SHEET_CATEGORIES.map(async cat => {
+      try {
+        perCategoryRows[cat.id] = await fetchCategorySheet(cat);
+      } catch (err){
+        categoryErrors.push({ catId: cat.id, label: cat.label, message: err.message || String(err) });
+      }
+    }));
+
+    liveDealerRows = buildLiveRows(perCategoryRows);
+    lastFetchedAt = new Date();
+    isFetching = false;
+    renderSummaryErrors();
+    renderTabs();
+    renderSummaryTable(summarySearch.value || "");
+    updateLastUpdatedLabel();
+  }
+
+  function updateLastUpdatedLabel(){
+    const el = document.getElementById("excelUpdatedAt");
+    if (!el) return;
+    if (isFetching){
+      el.textContent = "Mengambil data terbaru...";
+    } else if (lastFetchedAt){
+      el.textContent = "Terakhir diperbarui: " + lastFetchedAt.toLocaleString("id-ID");
+    } else {
+      el.textContent = "Terakhir diperbarui: -";
+    }
+  }
+
+  function renderSummaryErrors(){
+    const box = document.getElementById("summaryErrors");
+    if (!box) return;
+    if (!categoryErrors.length){
+      box.style.display = "none";
+      box.innerHTML = "";
+      return;
+    }
+    box.style.display = "block";
+    box.className = "summary-errors";
+    box.innerHTML = "<strong>" + categoryErrors.length + " kategori gagal dimuat (kategori lain tetap tampil):</strong>" +
+      categoryErrors.map(e => {
+        const cat = SHEET_CATEGORIES.find(c => c.id === e.catId);
+        const testUrl = csvUrlFor(SPREADSHEET_IDS[cat.dept], cat.sheetName);
+        return "&bull; " + e.label + " (" + DEPT_LABEL[cat.dept] + "): " + e.message +
+          " &mdash; <a href=\"" + testUrl + "\" target=\"_blank\" rel=\"noopener noreferrer\">cek link CSV</a>";
+      }).join("<br>");
+  }
+
+  const rupiah = (n) => "Rp " + n.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  function renderTabs(){
+    const tabsHtml = [
+      `<button type="button" class="summary-tab ${activeCategory === MATRIX_ID ? "active" : ""}" data-cat="${MATRIX_ID}">Matrix (Semua Kategori)</button>`
+    ].concat(SHEET_CATEGORIES.map(cat => `
+      <button type="button" class="summary-tab ${cat.id === activeCategory ? "active" : ""}" data-cat="${cat.id}">
+        ${cat.label}<span class="dept-tag">${DEPT_LABEL[cat.dept]}</span>
+      </button>
+    `)).join("");
+    summaryTabs.innerHTML = tabsHtml;
+    summaryTabs.querySelectorAll(".summary-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        activeCategory = btn.getAttribute("data-cat");
+        summarySearch.value = "";
+        renderTabs();
+        renderSummaryTable("");
+      });
+    });
+  }
+
+  function filteredLiveRows(filterText){
+    const q = (filterText || "").trim().toLowerCase();
+    return liveDealerRows.filter(r => !q ||
+      r.dealer.toLowerCase().includes(q) ||
+      (r.kode || "").toLowerCase().includes(q));
+  }
+
+  function renderSummaryTable(filterText){
+    if (isFetching){
+      summaryTableWrap.style.display = "none";
+      summaryNote.innerHTML = `<div class="summary-loading-box">Menarik data live dari Google Sheets seluruh departemen&hellip;</div>`;
+      summaryFootTotal.textContent = "-";
+      statDealerCount.textContent = "-";
+      statGrandTotal.textContent = "-";
+      return;
+    }
+
+    if (activeCategory === MATRIX_ID){
+      renderMatrixTable(filterText);
+      return;
+    }
+
+    const cat = SHEET_CATEGORIES.find(c => c.id === activeCategory);
+    summaryTable.classList.remove("matrix-view");
+    summaryTheadRow.innerHTML = `
+      <th>No</th>
+      <th>Kode Dealer</th>
+      <th>Nama Dealer</th>
+      <th class="num" id="summaryValueHeader">${cat.label.replace(/^\d+\.\s*/, "")}</th>
+    `;
+    summaryTfootRow.innerHTML = `
+      <td colspan="3">TOTAL KATEGORI INI</td>
+      <td class="num" id="summaryFootTotal">-</td>
+    `;
+
+    summaryTableWrap.style.display = "";
+    summaryNote.innerHTML = `Data ditarik LIVE dari sheet "${cat.sheetName}" (sumber: Departemen ${DEPT_LABEL[cat.dept]})${cat.asIs ? " &mdash; nilai ditampilkan apa adanya, tanpa agregasi ulang." : "."}`;
+
+    const rows = filteredLiveRows(filterText)
+      .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
+      .sort((a, b) => b.value - a.value);
+
+    if (rows.length === 0){
+      summaryTbody.innerHTML = `<tr><td colspan="4" class="summary-empty">Tidak ada dealer yang cocok dengan pencarian.</td></tr>`;
+    } else {
+      summaryTbody.innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.kode || "-"}</td>
+          <td>${r.dealer}</td>
+          <td class="num">${rupiah(r.value)}</td>
+        </tr>
+      `).join("");
+    }
+
+    const filteredTotal = rows.reduce((sum, r) => sum + r.value, 0);
+    document.getElementById("summaryFootTotal").textContent = rupiah(filteredTotal);
+    statDealerCount.textContent = rows.length;
+    statGrandTotal.textContent = rupiah(filteredTotal);
+  }
+
+  function renderMatrixTable(filterText){
+    summaryTable.classList.add("matrix-view");
+    summaryTableWrap.style.display = "";
+    summaryNote.innerHTML = `Tabel gabungan semua 13 kategori (seperti Excel rekap). Baris = union seluruh dealer dari semua sheet sumber, dicocokkan via Kode Dealer.`;
+    summaryTheadRow.innerHTML = `
+      <th>No</th>
+      <th>Kode Dealer</th>
+      <th>Dealer</th>
+      ${SHEET_CATEGORIES.map(cat => `<th class="num">${cat.label.replace(/^\d+\.\s*/, "")}</th>`).join("")}
+      <th class="num total-col">TOTAL</th>
+    `;
+    summaryTfootRow.innerHTML = `
+      <td colspan="${2 + 1}">GRAND TOTAL</td>
+      ${SHEET_CATEGORIES.map(cat => `<td class="num" data-foot="${cat.id}">-</td>`).join("")}
+      <td class="num total-col" id="summaryFootTotal">-</td>
+    `;
+
+    const rows = filteredLiveRows(filterText).sort((a, b) => b.total - a.total);
+
+    if (rows.length === 0){
+      summaryTbody.innerHTML = `<tr><td colspan="${3 + SHEET_CATEGORIES.length + 1}" class="summary-empty">Tidak ada dealer yang cocok dengan pencarian.</td></tr>`;
+    } else {
+      summaryTbody.innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${r.kode || "-"}</td>
+          <td>${r.dealer}</td>
+          ${SHEET_CATEGORIES.map(cat => `<td class="num">${rupiah(r.values[cat.id] || 0)}</td>`).join("")}
+          <td class="num total-col">${rupiah(r.total)}</td>
+        </tr>
+      `).join("");
+    }
+
+    const catTotals = {};
+    SHEET_CATEGORIES.forEach(cat => { catTotals[cat.id] = 0; });
+    let grandTotal = 0;
+    rows.forEach(r => {
+      SHEET_CATEGORIES.forEach(cat => { catTotals[cat.id] += r.values[cat.id] || 0; });
+      grandTotal += r.total;
+    });
+    SHEET_CATEGORIES.forEach(cat => {
+      const el = summaryTfootRow.querySelector(`[data-foot="${cat.id}"]`);
+      if (el) el.textContent = rupiah(catTotals[cat.id]);
+    });
+    document.getElementById("summaryFootTotal").textContent = rupiah(grandTotal);
+    statDealerCount.textContent = rows.length;
+    statGrandTotal.textContent = rupiah(grandTotal);
+  }
+
+  function openSummaryModal(){
+    activeCategory = MATRIX_ID;
+    summarySearch.value = "";
+    updateLastUpdatedLabel();
+    renderTabs();
+    renderSummaryTable("");
+    summaryOverlay.classList.add("open");
+    setTimeout(() => summarySearch.focus(), 100);
+    fetchAllData();
+  }
+
+  function closeSummaryModal(){
+    summaryOverlay.classList.remove("open");
+  }
+
+  /* ============================================================
+     KONFIGURASI DEPARTEMEN
+     - password   : kata sandi untuk departemen tsb
+     - sheetUrl   : link Google Sheet departemen tsb
+                    (pastikan sharing sheet minimal "Anyone with link - Viewer")
+     - accent1/2  : gradient warna kartu & tombol (format hex)
+     - accentSoft : warna lingkaran dekorasi & badge kode (soft tint)
+     - icon       : nama ikon ("folder", "shield", "chart", "megaphone")
+     ============================================================ */
+  const DEPARTMENTS = [
+    {
+      id: "admin",
+      code: "ADM",
+      name: "Departemen Admin",
+      desc: "Rekap saldo bonus dealer yang dikelola tim Admin.",
+      password: "pwADM",
+      sheetUrl: "https://docs.google.com/spreadsheets/d/19o_zDnZHaR_1aF3rnl94P4jzLWyrSAesOZbOWa2Us3g/edit?gid=0#gid=0",
+      accent1: "#ff6f9c",
+      accent2: "#c81d6c",
+      accentSoft: "#ffeef3",
+      icon: "folder"
+    },
+    {
+      id: "claim",
+      code: "CLM",
+      name: "Departemen Claim",
+      desc: "Rekap saldo bonus dealer yang dikelola tim Claim.",
+      password: "pwCLM",
+      sheetUrl: "https://docs.google.com/spreadsheets/d/1V--_7K0XEx66d3ouiCQe1OcJd4A29U0QPwN94gnKgNk/edit?gid=40413014#gid=40413014",
+      accent1: "#ff8fab",
+      accent2: "#e0328c",
+      accentSoft: "#ffeef6",
+      icon: "shield"
+    },
+    {
+      id: "tsd",
+      code: "TSD",
+      name: "Departemen TSD",
+      desc: "Rekap saldo bonus dealer yang dikelola tim TSD.",
+      password: "pwTSD",
+      sheetUrl: "https://docs.google.com/spreadsheets/d/1WXf8n_QchaOQ0o_vvhvC0M4BYwdQKb6-i8kUp3TR4RI/edit?pli=1&gid=1621663681#gid=1621663681",
+      accent1: "#f472a3",
+      accent2: "#a91762",
+      accentSoft: "#fdeaf1",
+      icon: "chart"
+    },
+    {
+      id: "marketing",
+      code: "MKT",
+      name: "Departemen Marketing",
+      desc: "Rekap saldo bonus dealer yang dikelola tim Marketing.",
+      password: "pwMKT",
+      sheetUrl: "https://docs.google.com/spreadsheets/d/1IYwT36YzxUMlh36SApJU1rXUNUwJ-I5aPk4nV3670lY/edit?gid=0#gid=0",
+      accent1: "#e0568c",
+      accent2: "#7a1153",
+      accentSoft: "#f9e6ee",
+      icon: "megaphone"
+    },
+    {
+      id: "summary",
+      code: "ALL",
+      name: "Rekap Keseluruhan Sisa Saldo",
+      desc: "Tarikan data LIVE lengkap sisa saldo bonus seluruh dealer, gabungan dari semua departemen (13 kategori).",
+      password: "pwALL",
+      type: "summary",
+      accent1: "#c81d6c",
+      accent2: "#47103a",
+      accentSoft: "#f6e3ee",
+      icon: "database"
+    }
+  ];
+
+  const ICONS = {
+    folder: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+    shield: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+    chart: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+    megaphone: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a2 2 0 0 0 2 2h1l4 4V5L6 9H5a2 2 0 0 0-2 2z"/><path d="M15 8a4 4 0 0 1 0 8M18 5a8 8 0 0 1 0 14"/></svg>',
+    database: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>'
+  };
+
+  const cardGrid = document.getElementById("cardGrid");
+  const overlay = document.getElementById("overlay");
+  const modal = document.getElementById("modal");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalCode = document.getElementById("modalCode");
+  const modalIcon = document.getElementById("modalIcon");
+  const pwForm = document.getElementById("pwForm");
+  const pwInput = document.getElementById("pwInput");
+  const pwToggle = document.getElementById("pwToggle");
+  const errorMsg = document.getElementById("errorMsg");
+  const successMsg = document.getElementById("successMsg");
+  const submitBtn = document.getElementById("submitBtn");
+  const modalClose = document.getElementById("modalClose");
+  const lastVisitInfo = document.getElementById("lastVisitInfo");
+
+  const summaryOverlay = document.getElementById("summaryOverlay");
+  const summaryClose = document.getElementById("summaryClose");
+  const summaryTabs = document.getElementById("summaryTabs");
+  const summaryTable = document.getElementById("summaryTable");
+  const summaryTheadRow = document.getElementById("summaryTheadRow");
+  const summaryTfootRow = document.getElementById("summaryTfootRow");
+  const summaryTbody = document.getElementById("summaryTbody");
+  let summaryFootTotal = document.getElementById("summaryFootTotal");
+  const summarySearch = document.getElementById("summarySearch");
+  const summaryCsvBtn = document.getElementById("summaryCsvBtn");
+  const summaryDownloadExcelBtn = document.getElementById("summaryDownloadExcelBtn");
+  const summaryRefreshBtn = document.getElementById("summaryRefreshBtn");
+  let summaryValueHeader = document.getElementById("summaryValueHeader");
+  const summaryNote = document.getElementById("summaryNote");
+  const summaryTableWrap = document.querySelector(".summary-table-wrap");
+  const statDealerCount = document.getElementById("statDealerCount");
+  const statGrandTotal = document.getElementById("statGrandTotal");
+
+  summarySearch.addEventListener("input", () => renderSummaryTable(summarySearch.value));
+  summaryClose.addEventListener("click", closeSummaryModal);
+  summaryOverlay.addEventListener("click", (e) => { if (e.target === summaryOverlay) closeSummaryModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && summaryOverlay.classList.contains("open")) closeSummaryModal();
+  });
+
+  summaryRefreshBtn.addEventListener("click", () => { fetchAllData(); });
+
+  summaryDownloadExcelBtn.addEventListener("click", () => {
+    if (isFetching || !liveDealerRows.length){
+      alert("Data belum siap. Tunggu proses pengambilan data selesai atau tekan Refresh dahulu.");
+      return;
+    }
+    try {
+      const summarySheetRows = [
+        ["NO", "Kode Dealer", "DEALER", ...SHEET_CATEGORIES.map(c => c.label.replace(/^\d+\.\s*/, "")), "TOTAL"]
+      ];
+      liveDealerRows.forEach((r, i) => {
+        summarySheetRows.push([
+          i + 1,
+          r.kode || "-",
+          r.dealer,
+          ...SHEET_CATEGORIES.map(c => r.values[c.id] || 0),
+          r.total
+        ]);
+      });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summarySheetRows), "Summary");
+      SHEET_CATEGORIES.forEach(cat => {
+        const detailRows = [["No", "Kode Dealer", "Nama Dealer", cat.label.replace(/^\d+\.\s*/, "")]];
+        liveDealerRows
+          .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
+          .sort((a, b) => b.value - a.value)
+          .forEach((r, i) => detailRows.push([i + 1, r.kode || "-", r.dealer, r.value]));
+        const sheetName = cat.label.replace(/^\d+\.\s*/, "").slice(0, 31);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailRows), sheetName);
+      });
+      XLSX.writeFile(wb, "Rekap_Keseluruhan_Sisa_Saldo_Dealer.xlsx");
+    } catch (err){
+      alert("Gagal membuat file Excel: " + (err.message || err));
+    }
+  });
+
+  summaryCsvBtn.addEventListener("click", () => {
+    if (isFetching) return;
+    if (activeCategory === MATRIX_ID){
+      const header = ["No", "Kode Dealer", "Dealer", ...SHEET_CATEGORIES.map(c => c.label.replace(/^\d+\.\s*/, "")), "Total"];
+      const sorted = [...liveDealerRows].sort((a, b) => b.total - a.total);
+      const lines = [header.join(";")].concat(
+        sorted.map((r, i) => [i + 1, r.kode || "-", r.dealer, ...SHEET_CATEGORIES.map(c => r.values[c.id] || 0), r.total].join(";"))
+      );
+      const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "rekap_matrix.csv";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    }
+    const cat = SHEET_CATEGORIES.find(c => c.id === activeCategory);
+    const header = ["No", "Kode Dealer", "Nama Dealer", cat.label.replace(/^\d+\.\s*/, "")];
+    const sorted = liveDealerRows
+      .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
+      .sort((a, b) => b.value - a.value);
+    const lines = [header.join(";")].concat(
+      sorted.map((r, i) => [i + 1, r.kode || "-", r.dealer, r.value].join(";"))
+    );
+    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "rekap_" + cat.id + ".csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  let activeDept = null;
+
+  function renderCards(){
+    DEPARTMENTS.forEach(dept => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "card";
+      card.style.setProperty("--accent-1", dept.accent1);
+      card.style.setProperty("--accent-2", dept.accent2);
+      card.style.setProperty("--accent-soft", dept.accentSoft);
+      card.setAttribute("aria-label", "Buka " + dept.name);
+      card.innerHTML = `
+        <div class="card-top">
+          <div class="icon-badge">${ICONS[dept.icon] || ICONS.folder}</div>
+          <span class="code-stamp">${dept.code}</span>
+        </div>
+        <h2>${dept.name}</h2>
+        <p>${dept.desc}</p>
+        <div class="card-footer">
+          <span>Terkunci</span>
+          <span class="go">${dept.type === "summary" ? "Buka Rekap" : "Buka Sheet"} &rarr;</span>
+        </div>
+      `;
+      card.addEventListener("click", () => openModal(dept));
+      cardGrid.appendChild(card);
+    });
+  }
+
+  function openModal(dept){
+    activeDept = dept;
+    modalTitle.textContent = dept.name;
+    modalCode.textContent = dept.code;
+    modalCode.style.color = dept.accent2;
+    modalCode.style.background = dept.accentSoft;
+    modalIcon.innerHTML = ICONS[dept.icon] || ICONS.folder;
+    modalIcon.style.background = `linear-gradient(135deg, ${dept.accent1}, ${dept.accent2})`;
+    modalIcon.style.boxShadow = `0 8px 18px -6px ${dept.accent2}`;
+    pwInput.value = "";
+    pwInput.type = "password";
+    pwToggle.classList.remove("showing");
+    errorMsg.textContent = "";
+    successMsg.textContent = "";
+    submitBtn.disabled = false;
+    submitBtn.style.background = `linear-gradient(135deg, ${dept.accent1}, ${dept.accent2})`;
+    submitBtn.textContent = dept.type === "summary" ? "Buka Rekap" : "Buka Spreadsheet";
+    document.querySelector(".modal .hint").textContent = dept.type === "summary"
+      ? "Masukkan kata sandi untuk membuka tarikan data lengkap sisa saldo seluruh dealer."
+      : "Masukkan kata sandi departemen untuk membuka spreadsheet sisa saldo bonus dealer.";
+    overlay.classList.add("open");
+    setTimeout(() => pwInput.focus(), 100);
+  }
+
+  function closeModal(){
+    overlay.classList.remove("open");
+    activeDept = null;
+  }
+
+  pwToggle.addEventListener("click", () => {
+    const showing = pwInput.type === "text";
+    pwInput.type = showing ? "password" : "text";
+    pwToggle.classList.toggle("showing", !showing);
+    pwToggle.setAttribute("aria-label", showing ? "Tampilkan kata sandi" : "Sembunyikan kata sandi");
+    pwInput.focus();
+  });
+
+  modalClose.addEventListener("click", closeModal);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.classList.contains("open")) closeModal();
+  });
+
+  pwForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!activeDept) return;
+
+    if (pwInput.value === activeDept.password){
+      errorMsg.textContent = "";
+      const isSummary = activeDept.type === "summary";
+
+      lastVisitInfo.textContent = "Akses terakhir: " + activeDept.name + " · " + new Date().toLocaleTimeString("id-ID");
+
+      if (isSummary){
+        successMsg.textContent = "Kata sandi benar. Menyiapkan rekap...";
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Membuka...";
+        setTimeout(() => {
+          closeModal();
+          openSummaryModal();
+        }, 400);
+        return;
+      }
+
+      // PENTING: window.open harus dipanggil LANGSUNG di sini (bukan di dalam
+      // setTimeout), karena browser hanya mengizinkan popup/tab baru yang
+      // dipicu langsung dari aksi pengguna (klik/submit). Kalau dipanggil
+      // setelah delay, browser (terutama di HP) akan memblokirnya diam-diam
+      // tanpa pesan error apa pun — inilah penyebab "tidak connect" sebelumnya.
+      const newTab = window.open(activeDept.sheetUrl, "_blank", "noopener,noreferrer");
+
+      if (newTab){
+        successMsg.textContent = "Kata sandi benar. Spreadsheet dibuka di tab baru.";
+        setTimeout(() => closeModal(), 600);
+      } else {
+        // Popup diblokir oleh browser -> tampilkan link manual sebagai fallback
+        errorMsg.textContent = "";
+        successMsg.innerHTML = "Kata sandi benar, tapi browser memblokir tab baru. " +
+          "<a href=\"" + activeDept.sheetUrl + "\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color:var(--magenta); font-weight:700; text-decoration: underline;\">Klik di sini untuk membuka spreadsheet</a>.";
+      }
+    } else {
+      successMsg.textContent = "";
+      errorMsg.textContent = "Kata sandi salah. Coba lagi.";
+      modal.classList.remove("shake");
+      void modal.offsetWidth;
+      modal.classList.add("shake");
+      pwInput.value = "";
+      pwInput.focus();
+    }
+  });
+
+  renderCards();
+
+</script>
+
+</body>
+</html>
