@@ -1059,34 +1059,15 @@
      Auto-deteksi baris header (dicari baris yang punya kolom
      mengandung kata "dealer") dan kolom kode/dealer/nilai.
      ============================================================ */
-  async function fetchCategorySheet(cat){
-    const spreadsheetId = SPREADSHEET_IDS[cat.dept];
-    const url = csvUrlFor(spreadsheetId, cat.sheetName);
-    let res;
-    try {
-      res = await fetch(url, { credentials: "omit" });
-    } catch (networkErr){
-      if (location.protocol === "file:"){
-        throw new Error("Gagal konek: file dibuka langsung (file://). Buka index.html lewat web server/hosting (mis. GitHub Pages, Netlify, atau 'python -m http.server'), bukan double-click file.");
-      }
-      throw new Error("Gagal konek ke Google Sheets (cek internet, atau ada extension/adblocker yang memblokir docs.google.com)");
-    }
-    if (!res.ok){
-      if (res.status === 400 || res.status === 404){
-        throw new Error("Sheet/tab \"" + cat.sheetName + "\" tidak ditemukan di spreadsheet ini (cek nama tab persis sama)");
-      }
-      throw new Error("HTTP " + res.status + " saat mengambil sheet");
-    }
-    const text = await res.text();
-    if (/^\s*<(!DOCTYPE|html)/i.test(text)){
-      throw new Error("Sheet belum bisa diakses publik. Set Share > General access ke 'Anyone with the link - Viewer'");
-    }
-    const parsed = Papa.parse(text.trim(), { skipEmptyLines: true });
-    const table = parsed.data;
-    if (!table || table.length === 0){
-      throw new Error("Sheet/tab \"" + cat.sheetName + "\" kosong atau tidak ditemukan");
-    }
-
+  /* ============================================================
+     Deteksi kolom (header/kode/dealer/nilai) dari 1 tabel CSV yang
+     sudah di-parse. Dipisah jadi fungsi sendiri supaya bisa dipanggil
+     ulang kalau parsing pertama gagal/rusak (lihat retry di
+     fetchCategorySheet).
+     Return: {headerIdx, kodeIdx, dealerIdx, valueIdx} atau null
+     kalau kolom dealer/nama tidak berhasil ditemukan.
+     ============================================================ */
+  function detectColumns(table){
     let headerIdx = -1, kodeIdx = -1, dealerIdx = -1, valueIdx = -1;
     const scanLimit = Math.min(table.length, 25);
 
@@ -1145,10 +1126,6 @@
        Pass 4 (LAST RESORT): deteksi kolom dari ISI DATA, bukan dari
        nama header. Dipakai kalau format sheet beda-beda antar
        departemen/kategori dan nama kolomnya tidak baku sama sekali.
-       Logika: baris header = baris non-kosong pertama; lalu tiap
-       kolom di bawahnya diklasifikasi (angka / kode singkat / nama
-       panjang) berdasar isinya, supaya tetap bisa nyambung ke data
-       apapun formatnya selama pola "kode - nama - saldo" ada.
        ============================================================ */
     if (headerIdx === -1){
       const looksNumeric = (raw) => {
@@ -1235,18 +1212,86 @@
       }
     }
 
-    if (headerIdx === -1){
-      const preview = table.slice(0, 5)
-        .map((r, idx) => (idx + 1) + ":[" + r.map(c => (c || "").toString().trim()).filter(Boolean).join(" | ") + "]")
-        .filter(s => !s.endsWith(":[]"))
-        .join("  ");
-      throw new Error("Kolom Dealer/Nama tidak ditemukan di \"" + cat.sheetName + "\". Isi baris awal sheet: " + (preview || "(kosong)"));
-    }
+    if (headerIdx === -1) return null;
     if (valueIdx === -1){
       // fallback: kolom numerik terakhir pada baris header (paling kanan)
       valueIdx = table[headerIdx].length - 1;
     }
+    return { headerIdx, kodeIdx, dealerIdx, valueIdx };
+  }
 
+  function buildPreview(table){
+    return table.slice(0, 5)
+      .map((r, idx) => (idx + 1) + ":[" + r.map(c => (c || "").toString().trim()).filter(Boolean).join(" | ") + "]")
+      .filter(s => !s.endsWith(":[]"))
+      .join("  ");
+  }
+
+  /* ============================================================
+     Heuristik: apakah hasil parse CSV "kelihatan rusak"? Ini terjadi
+     kalau ada karakter tanda kutip (") nyangkut di salah satu sel
+     sumber, bikin parser CSV standar salah baca batas antar baris
+     (banyak baris data ke-gabung jadi 1 sel raksasa). Cirinya: ada
+     baris dengan 1-2 sel tapi isinya sangat panjang.
+     ============================================================ */
+  function looksCorrupted(table){
+    return table.some(row => {
+      if (!row || row.length > 3) return false;
+      const joined = row.map(c => (c || "").toString()).join("");
+      return joined.length > 300;
+    });
+  }
+
+  async function fetchCategorySheet(cat){
+    const spreadsheetId = SPREADSHEET_IDS[cat.dept];
+    const url = csvUrlFor(spreadsheetId, cat.sheetName);
+    let res;
+    try {
+      res = await fetch(url, { credentials: "omit" });
+    } catch (networkErr){
+      if (location.protocol === "file:"){
+        throw new Error("Gagal konek: file dibuka langsung (file://). Buka index.html lewat web server/hosting (mis. GitHub Pages, Netlify, atau 'python -m http.server'), bukan double-click file.");
+      }
+      throw new Error("Gagal konek ke Google Sheets (cek internet, atau ada extension/adblocker yang memblokir docs.google.com)");
+    }
+    if (!res.ok){
+      if (res.status === 400 || res.status === 404){
+        throw new Error("Sheet/tab \"" + cat.sheetName + "\" tidak ditemukan di spreadsheet ini (cek nama tab persis sama)");
+      }
+      throw new Error("HTTP " + res.status + " saat mengambil sheet");
+    }
+    const text = await res.text();
+    if (/^\s*<(!DOCTYPE|html)/i.test(text)){
+      throw new Error("Sheet belum bisa diakses publik. Set Share > General access ke 'Anyone with the link - Viewer'");
+    }
+
+    let table = Papa.parse(text.trim(), { skipEmptyLines: true }).data;
+    if (!table || table.length === 0){
+      throw new Error("Sheet/tab \"" + cat.sheetName + "\" kosong atau tidak ditemukan");
+    }
+
+    let cols = detectColumns(table);
+
+    // Retry: kalau gagal ATAU hasil parse kelihatan rusak (baris ke-gabung
+    // karena ada tanda kutip nyangkut di salah satu sel), parse ulang
+    // dengan quote dimatikan sepenuhnya (setiap koma = pemisah kolom apa
+    // adanya) supaya batas baris kembali benar.
+    if (!cols || looksCorrupted(table)){
+      const tableNoQuote = Papa.parse(text.trim(), { skipEmptyLines: true, quoteChar: "\u0000" }).data;
+      if (tableNoQuote && tableNoQuote.length > table.length){
+        const colsRetry = detectColumns(tableNoQuote);
+        if (colsRetry){
+          table = tableNoQuote;
+          cols = colsRetry;
+        }
+      }
+    }
+
+    if (!cols){
+      throw new Error("Kolom Dealer/Nama tidak ditemukan di \"" + cat.sheetName + "\". Isi baris awal sheet: " + (buildPreview(table) || "(kosong)"));
+    }
+
+    const { headerIdx, kodeIdx, dealerIdx, valueIdx } = cols;
     const out = [];
     for (let i = headerIdx + 1; i < table.length; i++){
       const row = table[i];
