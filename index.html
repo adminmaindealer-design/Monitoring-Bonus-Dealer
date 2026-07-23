@@ -1088,25 +1088,159 @@
     }
 
     let headerIdx = -1, kodeIdx = -1, dealerIdx = -1, valueIdx = -1;
-    for (let i = 0; i < Math.min(table.length, 8); i++){
-      const row = table[i].map(c => (c || "").toString().toLowerCase());
+    const scanLimit = Math.min(table.length, 25);
+
+    function pickValueCol(row){
+      const valCandidates = row
+        .map((c, idx) => ({ idx, c }))
+        .filter(o => /saldo|total|jumlah|nominal|nilai/.test(o.c));
+      if (!valCandidates.length) return -1;
+      const sisa = valCandidates.find(o => o.c.includes("sisa"));
+      return (sisa || valCandidates[valCandidates.length - 1]).idx;
+    }
+
+    // Pass 1: cari kolom yang jelas bernama "dealer" (bukan gabungan "kode dealer")
+    for (let i = 0; i < scanLimit; i++){
+      const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
       const dIdx = row.findIndex(c => c.includes("dealer") && !c.includes("kode"));
       if (dIdx > -1){
         headerIdx = i;
         dealerIdx = dIdx;
         kodeIdx = row.findIndex(c => c.includes("kode"));
-        const valCandidates = row
-          .map((c, idx) => ({ idx, c }))
-          .filter(o => /saldo|total|jumlah|nominal|nilai/.test(o.c));
-        if (valCandidates.length){
-          const sisa = valCandidates.find(o => o.c.includes("sisa"));
-          valueIdx = (sisa || valCandidates[valCandidates.length - 1]).idx;
-        }
+        valueIdx = pickValueCol(row);
         break;
       }
     }
+    // Pass 2: fallback ke kolom "nama" (mis. "Nama Dealer/Toko" ditulis beda)
     if (headerIdx === -1){
-      throw new Error("Header (kolom Dealer) tidak ditemukan di \"" + cat.sheetName + "\"");
+      for (let i = 0; i < scanLimit; i++){
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const nIdx = row.findIndex(c => c.includes("nama"));
+        if (nIdx > -1){
+          headerIdx = i;
+          dealerIdx = nIdx;
+          kodeIdx = row.findIndex(c => c.includes("kode"));
+          valueIdx = pickValueCol(row);
+          break;
+        }
+      }
+    }
+    // Pass 3: fallback kalau header cuma "Kode Dealer" gabung tanpa kolom nama terpisah
+    // -> pakai kolom "kode dealer" itu juga sbg nama (drpd gagal total)
+    if (headerIdx === -1){
+      for (let i = 0; i < scanLimit; i++){
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const kdIdx = row.findIndex(c => c.includes("dealer"));
+        if (kdIdx > -1){
+          headerIdx = i;
+          dealerIdx = kdIdx;
+          kodeIdx = kdIdx;
+          valueIdx = pickValueCol(row);
+          break;
+        }
+      }
+    }
+
+    /* ============================================================
+       Pass 4 (LAST RESORT): deteksi kolom dari ISI DATA, bukan dari
+       nama header. Dipakai kalau format sheet beda-beda antar
+       departemen/kategori dan nama kolomnya tidak baku sama sekali.
+       Logika: baris header = baris non-kosong pertama; lalu tiap
+       kolom di bawahnya diklasifikasi (angka / kode singkat / nama
+       panjang) berdasar isinya, supaya tetap bisa nyambung ke data
+       apapun formatnya selama pola "kode - nama - saldo" ada.
+       ============================================================ */
+    if (headerIdx === -1){
+      const looksNumeric = (raw) => {
+        const s = (raw || "").toString().trim();
+        if (s === "") return false;
+        return /^\(?-?\s*(rp\.?\s*)?[\d.,]+\)?%?$/i.test(s);
+      };
+      const classifyCell = (raw) => {
+        const s = (raw || "").toString().trim();
+        if (s === "") return "empty";
+        if (looksNumeric(s)) return "numeric";
+        if (/\s/.test(s) || s.length > 14) return "name";
+        return "code";
+      };
+
+      let guessHeaderIdx = table.findIndex(r => r.some(c => (c || "").toString().trim() !== ""));
+      if (guessHeaderIdx === -1) guessHeaderIdx = 0;
+
+      const sample = table.slice(guessHeaderIdx + 1, guessHeaderIdx + 1 + 40);
+      const colCount = Math.max(...table.slice(guessHeaderIdx, guessHeaderIdx + 41).map(r => r.length), 1);
+      const stats = [];
+      for (let c = 0; c < colCount; c++){
+        const st = { numeric: 0, name: 0, code: 0, empty: 0, avgLen: 0, sequential: true, textLenTotal: 0, textCount: 0 };
+        sample.forEach((row, ri) => {
+          const raw = row ? row[c] : undefined;
+          const kind = classifyCell(raw);
+          st[kind]++;
+          const s = (raw || "").toString().trim();
+          if (s){ st.textLenTotal += s.length; st.textCount++; }
+          const asNum = parseFloat(s.replace(/[^\d.\-]/g, ""));
+          if (!(kind === "numeric" && Math.round(asNum) === ri + 1)) st.sequential = false;
+        });
+        st.avgLen = st.textCount ? st.textLenTotal / st.textCount : 0;
+        stats.push(st);
+      }
+
+      const headerRowText = (table[guessHeaderIdx] || []).map(c => (c || "").toString().trim().toLowerCase());
+      let guessKodeIdx = headerRowText.findIndex(c => c.includes("kode"));
+
+      let bestNameIdx = -1, bestNameScore = -1;
+      stats.forEach((st, idx) => {
+        if (idx === guessKodeIdx) return;
+        const total = st.numeric + st.name + st.code + st.empty;
+        if (!total) return;
+        const nameRatio = st.name / total;
+        const score = nameRatio * 2 + (st.avgLen / 30);
+        if ((st.name > 0 || st.avgLen > 6) && score > bestNameScore){
+          bestNameScore = score;
+          bestNameIdx = idx;
+        }
+      });
+
+      let bestValueIdx = -1, bestValueScore = -1;
+      stats.forEach((st, idx) => {
+        if (idx === guessKodeIdx || idx === bestNameIdx) return;
+        if (st.sequential) return; // kemungkinan kolom "No"
+        const total = st.numeric + st.name + st.code + st.empty;
+        if (!total) return;
+        const numRatio = st.numeric / total;
+        if (numRatio > 0.5 && idx >= bestValueScore){
+          bestValueScore = idx; // prefer kolom paling kanan yg numerik
+          bestValueIdx = idx;
+        }
+      });
+
+      if (guessKodeIdx === -1){
+        // cari kolom "code-like" (token pendek tanpa spasi) selain nama/value
+        let bestCodeIdx = -1, bestCodeScore = -1;
+        stats.forEach((st, idx) => {
+          if (idx === bestNameIdx || idx === bestValueIdx) return;
+          const total = st.numeric + st.name + st.code + st.empty;
+          if (!total) return;
+          const codeRatio = st.code / total;
+          if (codeRatio > bestCodeScore){ bestCodeScore = codeRatio; bestCodeIdx = idx; }
+        });
+        if (bestCodeScore > 0.3) guessKodeIdx = bestCodeIdx;
+      }
+
+      if (bestNameIdx > -1 && bestValueIdx > -1){
+        headerIdx = guessHeaderIdx;
+        dealerIdx = bestNameIdx;
+        kodeIdx = guessKodeIdx;
+        valueIdx = bestValueIdx;
+      }
+    }
+
+    if (headerIdx === -1){
+      const preview = table.slice(0, 5)
+        .map((r, idx) => (idx + 1) + ":[" + r.map(c => (c || "").toString().trim()).filter(Boolean).join(" | ") + "]")
+        .filter(s => !s.endsWith(":[]"))
+        .join("  ");
+      throw new Error("Kolom Dealer/Nama tidak ditemukan di \"" + cat.sheetName + "\". Isi baris awal sheet: " + (preview || "(kosong)"));
     }
     if (valueIdx === -1){
       // fallback: kolom numerik terakhir pada baris header (paling kanan)
@@ -1209,6 +1343,11 @@
     }
   }
 
+  function escapeHtml(s){
+    return (s || "").toString()
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
   function renderSummaryErrors(){
     const box = document.getElementById("summaryErrors");
     if (!box) return;
@@ -1223,7 +1362,7 @@
       categoryErrors.map(e => {
         const cat = SHEET_CATEGORIES.find(c => c.id === e.catId);
         const testUrl = csvUrlFor(SPREADSHEET_IDS[cat.dept], cat.sheetName);
-        return "&bull; " + e.label + " (" + DEPT_LABEL[cat.dept] + "): " + e.message +
+        return "&bull; " + e.label + " (" + DEPT_LABEL[cat.dept] + "): " + escapeHtml(e.message) +
           " &mdash; <a href=\"" + testUrl + "\" target=\"_blank\" rel=\"noopener noreferrer\">cek link CSV</a>";
       }).join("<br>");
   }
