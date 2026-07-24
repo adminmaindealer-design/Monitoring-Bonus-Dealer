@@ -957,7 +957,8 @@
     { id: "bsistem",   label: "1. Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: false },
     { id: "btactical", label: "2. Bonus Tactical",     dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
     { id: "bdev",      label: "3. Bonus Development",  dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
-    { id: "pxp1",      label: "4. Pengembalian XP1",   dept: "claim",     sheetName: "Pengembalian XP1",        asIs: true  },
+    { id: "pxp1",      label: "4. Pengembalian XP1",   dept: "claim",     sheetName: "Pengembalian XP1",        asIs: true,
+      valueHeaderMatch: "Periode SSU Des 22-Des 23" },
     { id: "xp1",       label: "5. XP1",                dept: "claim",     sheetName: "XP1",                     asIs: false },
     { id: "xp23",      label: "6. XP2 & XP3",          dept: "admin",     sheetName: "XP2 XP3",                 asIs: false },
     { id: "scp",       label: "7. SCP",                dept: "claim",     sheetName: "SCP",                     asIs: false },
@@ -965,7 +966,8 @@
     { id: "gc",        label: "9. GC",                 dept: "claim",     sheetName: "GC",                      asIs: false },
     { id: "kpb",       label: "10. KPB",               dept: "claim",     sheetName: "KPB",                     asIs: false },
     { id: "btl",       label: "11. BTL",               dept: "claim",     sheetName: "BTL",                     asIs: false },
-    { id: "lcr",       label: "12. LCR",               dept: "claim",     sheetName: "LCR",                     asIs: false },
+    { id: "lcr",       label: "12. LCR",               dept: "claim",     sheetName: "LCR",                     asIs: false,
+      valueHeaderMatch: "Amount", combinedKodeDealer: true },
     { id: "ahass",     label: "13. Bonus AHASS",       dept: "tsd",       sheetName: "Sisa Saldo",              asIs: true  }
   ];
 
@@ -1007,24 +1009,36 @@
     if (/^\(.*\)$/.test(s)){ negative = true; s = s.slice(1, -1); }
     s = s.replace(/[Rr]p\.?/g, "").replace(/[^0-9,.\-]/g, "");
     if (s === "" || s === "-") return 0;
-    const lastComma = s.lastIndexOf(",");
-    const lastDot = s.lastIndexOf(".");
-    if (lastComma > -1 && lastDot > -1){
+
+    const commaCount = (s.match(/,/g) || []).length;
+    const dotCount = (s.match(/\./g) || []).length;
+
+    if (commaCount > 0 && dotCount > 0){
+      // Campuran koma & titik -> pemisah desimal = simbol yg posisinya paling kanan
+      const lastComma = s.lastIndexOf(",");
+      const lastDot = s.lastIndexOf(".");
       if (lastComma > lastDot){
         s = s.replace(/\./g, "").replace(",", ".");
       } else {
         s = s.replace(/,/g, "");
       }
-    } else if (lastComma > -1){
+    } else if (commaCount > 0){
+      // Cuma koma: 2+ koma, atau 1 koma dgn 3 digit di belakang -> pemisah ribuan.
+      // 1 koma dgn 1-2 digit di belakang -> desimal.
+      const lastComma = s.lastIndexOf(",");
       const decLen = s.length - lastComma - 1;
-      if (decLen === 3 && (s.match(/,/g) || []).length === 1 && s.indexOf(",") !== 0){
-        // kemungkinan pemisah ribuan tunggal, mis. "1,234" -> ambigu;
-        // perlakukan sbg desimal hanya jika <=2 digit di belakang koma
-        s = s.replace(/,/g, "");
-      } else {
-        s = s.replace(/,/g, ".");
+      s = (commaCount >= 2 || decLen === 3) ? s.replace(/,/g, "") : s.replace(",", ".");
+    } else if (dotCount > 0){
+      // Cuma titik: 2+ titik (mis. "14.560.000"), atau 1 titik dgn 3 digit di
+      // belakang (mis. "14.560") -> pemisah ribuan ala Indonesia, BUKAN desimal.
+      // 1 titik dgn 1-2 digit di belakang (mis. "-0.48") -> tetap desimal.
+      const lastDot = s.lastIndexOf(".");
+      const decLen = s.length - lastDot - 1;
+      if (dotCount >= 2 || decLen === 3){
+        s = s.replace(/\./g, "");
       }
     }
+
     let n = parseFloat(s);
     if (isNaN(n)) n = 0;
     if (negative) n = -n;
@@ -1049,7 +1063,7 @@
      Return: {headerIdx, kodeIdx, dealerIdx, valueIdx} atau null
      kalau kolom dealer/nama tidak berhasil ditemukan.
      ============================================================ */
-  function detectColumns(table){
+  function detectColumns(table, cat){
     let headerIdx = -1, kodeIdx = -1, dealerIdx = -1, valueIdx = -1;
     const scanLimit = Math.min(table.length, 25);
 
@@ -1062,16 +1076,41 @@
       return (sisa || valCandidates[valCandidates.length - 1]).idx;
     }
 
+    // Pass 0: kalau kategori ini punya "valueHeaderMatch" eksplisit (utk
+    // sheet yang formatnya nyimpang jauh dari lainnya, mis. header kolom
+    // nilai bukan "saldo/total" tapi nama periode/"Amount"), cari kolom
+    // itu dulu sebelum coba tebak generik.
+    if (cat && cat.valueHeaderMatch){
+      const target = cat.valueHeaderMatch.toString().trim().toLowerCase();
+      for (let i = 0; i < scanLimit; i++){
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const vIdx = row.findIndex(c => c.includes(target));
+        if (vIdx > -1){
+          headerIdx = i;
+          valueIdx = vIdx;
+          kodeIdx = row.findIndex(c => c.includes("kode"));
+          dealerIdx = row.findIndex(c => c.includes("dealer") || c.includes("nama"));
+          if (dealerIdx === -1){
+            dealerIdx = row.findIndex((c, idx) => idx !== vIdx && c.trim() !== "");
+          }
+          if (dealerIdx === -1) dealerIdx = 0;
+          break;
+        }
+      }
+    }
+
     // Pass 1: cari kolom yang jelas bernama "dealer" (bukan gabungan "kode dealer")
-    for (let i = 0; i < scanLimit; i++){
-      const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
-      const dIdx = row.findIndex(c => c.includes("dealer") && !c.includes("kode"));
-      if (dIdx > -1){
-        headerIdx = i;
-        dealerIdx = dIdx;
-        kodeIdx = row.findIndex(c => c.includes("kode"));
-        valueIdx = pickValueCol(row);
-        break;
+    if (headerIdx === -1){
+      for (let i = 0; i < scanLimit; i++){
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const dIdx = row.findIndex(c => c.includes("dealer") && !c.includes("kode"));
+        if (dIdx > -1){
+          headerIdx = i;
+          dealerIdx = dIdx;
+          kodeIdx = row.findIndex(c => c.includes("kode"));
+          valueIdx = pickValueCol(row);
+          break;
+        }
       }
     }
     // Pass 2: fallback ke kolom "nama" (mis. "Nama Dealer/Toko" ditulis beda)
@@ -1249,20 +1288,18 @@
       throw new Error("Sheet/tab \"" + cat.sheetName + "\" kosong atau tidak ditemukan");
     }
 
-    let cols = detectColumns(table);
+    let cols = detectColumns(table, cat);
     let usedRetry = false;
 
-    // Retry: kalau gagal ATAU hasil parse kelihatan rusak (baris ke-gabung
-    // karena ada tanda kutip nyangkut di salah satu sel), parse ulang
-    // dengan quote dimatikan sepenuhnya (setiap koma = pemisah kolom apa
-    // adanya) supaya batas baris kembali benar.
-    if (!cols || looksCorrupted(table)){
+    // Retry: kalau kolom sama sekali tidak ketemu, coba parse ulang dengan
+    // quote dimatikan (jaga-jaga kalau ada tanda kutip nyangkut di suatu sel
+    // yang bikin baris ke-gabung). Kalau Pass 0 (valueHeaderMatch) atau pass
+    // lain sudah berhasil, jangan diutak-atik lagi.
+    if (!cols){
       const tableNoQuote = Papa.parse(text.trim(), { skipEmptyLines: true, quoteChar: "\u0000" }).data;
       if (tableNoQuote && tableNoQuote.length > 0){
-        const colsRetry = detectColumns(tableNoQuote);
-        // Pakai hasil retry kalau: parse asli gagal total, atau retry ini
-        // sudah tidak kelihatan rusak lagi, atau retry dapat baris lebih banyak.
-        if (colsRetry && (!cols || !looksCorrupted(tableNoQuote) || tableNoQuote.length > table.length)){
+        const colsRetry = detectColumns(tableNoQuote, cat);
+        if (colsRetry){
           table = tableNoQuote;
           cols = colsRetry;
           usedRetry = true;
@@ -1279,9 +1316,25 @@
     for (let i = headerIdx + 1; i < table.length; i++){
       const row = table[i];
       if (!row || row.every(c => (c || "").toString().trim() === "")) continue;
-      const dealerName = (row[dealerIdx] || "").toString().trim();
+      const rawDealerCell = (row[dealerIdx] || "").toString().trim();
+      if (!rawDealerCell) continue;
+
+      let dealerName, kode;
+      if (cat.combinedKodeDealer){
+        // Sel gabungan format "[KODE] Nama Dealer" -> pisahkan
+        const m = rawDealerCell.match(/^\[([^\]]+)\]\s*(.*)$/);
+        if (m){
+          kode = m[1].trim();
+          dealerName = m[2].trim() || kode;
+        } else {
+          kode = "";
+          dealerName = rawDealerCell;
+        }
+      } else {
+        dealerName = rawDealerCell;
+        kode = kodeIdx > -1 ? (row[kodeIdx] || "").toString().trim() : "";
+      }
       if (!dealerName) continue;
-      const kode = kodeIdx > -1 ? (row[kodeIdx] || "").toString().trim() : "";
       const value = parseSheetNumber(row[valueIdx]);
       out.push({ kode, dealer: dealerName, value });
     }
