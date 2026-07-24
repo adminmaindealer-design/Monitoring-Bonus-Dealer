@@ -6,7 +6,7 @@
 <title>Monitoring Rekap Sisa Saldo Dealer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -32,21 +32,23 @@
      ============================================================ */
 
   :root{
-    --bg:        #ffeef4;
-    --blush-100: #ffeef3;
-    --blush-200: #ffdce7;
-    --pink-400:  #ff9fbb;
-    --pink-500:  #ff6f9c;
-    --pink-600:  #f2447f;
-    --magenta:   #c81d6c;
-    --plum:      #5c1440;
-    --plum-800:  #47103a;
-    --ink:       #34212c;
-    --ink-soft:  #7a5f6b;
+    --bg:        #F8FAFC;
+    --blush-100: #F1F5F9;
+    --blush-200: #E5E7EB;
+    --pink-400:  #CBD5E1;
+    --pink-500:  #0F172A;
+    --pink-600:  #1E293B;
+    --magenta:   #0F172A;
+    --plum:      #0F172A;
+    --plum-800:  #0B1220;
+    --ink:       #0F172A;
+    --ink-soft:  #64748B;
     --white:     #ffffff;
-    --green:     #2f9e63;
-    --red:       #d1394f;
-    --font-display: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+    --green:     #16A34A;
+    --red:       #DC2626;
+    --border:    #E5E7EB;
+    --radius:    10px;
+    --font-display: 'Inter', 'Segoe UI', sans-serif;
     --font-body: 'Inter', 'Segoe UI', sans-serif;
     --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
   }
@@ -71,29 +73,7 @@
   }
 
   .blob{
-    position: fixed;
-    border-radius: 50%;
-    filter: blur(60px);
-    z-index: 0;
-    pointer-events: none;
-  }
-  .blob-1{
-    width: 480px; height: 480px;
-    top: -180px; left: -160px;
-    background: radial-gradient(circle, var(--pink-400) 0%, transparent 70%);
-    opacity: 0.55;
-  }
-  .blob-2{
-    width: 420px; height: 420px;
-    bottom: -160px; right: -140px;
-    background: radial-gradient(circle, var(--pink-500) 0%, transparent 70%);
-    opacity: 0.45;
-  }
-  .blob-3{
-    width: 300px; height: 300px;
-    top: 30%; right: 8%;
-    background: radial-gradient(circle, var(--blush-200) 0%, transparent 70%);
-    opacity: 0.7;
+    display: none;
   }
 
   .wrap{
@@ -125,8 +105,8 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 7px 14px 7px 10px;
-    border-radius: 999px;
-    box-shadow: 0 6px 16px rgba(200, 29, 108, 0.28);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.28);
   }
   .chip .pulse{
     width: 7px; height: 7px;
@@ -188,7 +168,7 @@
     position: relative;
     background: var(--white);
     border: 1px solid var(--blush-200);
-    border-radius: 20px;
+    border-radius: var(--radius);
     padding: 30px 28px 26px;
     cursor: pointer;
     overflow: hidden;
@@ -197,7 +177,7 @@
     display:flex;
     flex-direction: column;
     gap: 18px;
-    box-shadow: 0 4px 14px rgba(92, 20, 64, 0.06);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
   }
 
   .card::after{
@@ -216,7 +196,7 @@
   .card:hover{
     border-color: transparent;
     transform: translateY(-5px);
-    box-shadow: 0 22px 40px rgba(92, 20, 64, 0.16);
+    box-shadow: 0 22px 40px rgba(15, 23, 42, 0.16);
   }
 
   .card:focus-visible{
@@ -235,13 +215,13 @@
 
   .icon-badge{
     width: 52px; height: 52px;
-    border-radius: 14px;
+    border-radius: var(--radius);
     display:flex;
     align-items:center;
     justify-content:center;
     background: linear-gradient(135deg, var(--accent-1, #ff6f9c), var(--accent-2, #c81d6c));
     color: #fff;
-    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(200,29,108,0.5));
+    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(15, 23, 42, 0.5));
     flex-shrink: 0;
   }
 
@@ -252,7 +232,7 @@
     letter-spacing: 0.06em;
     color: var(--accent-2, var(--magenta));
     background: var(--accent-soft, var(--blush-100));
-    border-radius: 999px;
+    border-radius: var(--radius);
     padding: 5px 12px;
     align-self: flex-start;
   }
@@ -297,7 +277,7 @@
     align-items:center;
     gap: 6px;
     padding: 7px 14px;
-    border-radius: 999px;
+    border-radius: var(--radius);
     font-family: var(--font-body);
     font-weight: 600;
     font-size: 12.5px;
@@ -306,7 +286,7 @@
 
   .card:hover .go{
     transform: translateX(2px);
-    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(200,29,108,0.5));
+    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(15, 23, 42, 0.5));
   }
 
   footer.page-footer{
@@ -316,7 +296,7 @@
     padding: 18px 22px;
     background: var(--white);
     border: 1px solid var(--blush-200);
-    border-radius: 14px;
+    border-radius: var(--radius);
     font-size: 12.5px;
     color: var(--ink-soft);
     line-height: 1.6;
@@ -325,7 +305,7 @@
   .overlay{
     position: fixed;
     inset: 0;
-    background: rgba(71, 16, 58, 0.35);
+    background: rgba(15, 23, 42, 0.35);
     backdrop-filter: blur(4px);
     display:flex;
     align-items:center;
@@ -343,10 +323,11 @@
     width: 100%;
     max-width: 390px;
     background: var(--white);
-    border-radius: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 32px 28px 28px;
     position: relative;
-    box-shadow: 0 30px 60px rgba(71, 16, 58, 0.28);
+    box-shadow: 0 30px 60px rgba(15, 23, 42, 0.16);
     transform: translateY(10px) scale(0.98);
     transition: transform 0.18s ease;
   }
@@ -381,14 +362,14 @@
 
   .modal-icon{
     width: 52px; height: 52px;
-    border-radius: 14px;
+    border-radius: var(--radius);
     display:flex;
     align-items:center;
     justify-content:center;
     color: #fff;
     margin-bottom: 16px;
     background: linear-gradient(135deg, var(--accent-1, #ff6f9c), var(--accent-2, #c81d6c));
-    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(200,29,108,0.5));
+    box-shadow: 0 8px 18px -6px var(--accent-2, rgba(15, 23, 42, 0.5));
   }
 
   .modal h3{
@@ -425,8 +406,8 @@
   .pw-input{
     width: 100%;
     background: var(--blush-100);
-    border: 1.5px solid var(--blush-200);
-    border-radius: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 13px 46px 13px 14px;
     color: var(--ink);
     font-family: var(--font-mono);
@@ -449,7 +430,7 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    border-radius: 8px;
+    border-radius: var(--radius);
     transition: color 0.15s ease, background 0.15s ease;
   }
   .pw-toggle:hover{ color: var(--magenta); background: var(--blush-200); }
@@ -480,17 +461,17 @@
     background: linear-gradient(135deg, var(--pink-500), var(--magenta));
     color: var(--white);
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius);
     padding: 13px 14px;
     font-family: var(--font-body);
     font-weight: 700;
     font-size: 14.5px;
     cursor: pointer;
-    box-shadow: 0 10px 20px -8px rgba(200, 29, 108, 0.55);
+    box-shadow: 0 10px 20px -8px rgba(15, 23, 42, 0.55);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
 
-  .submit-btn:hover{ transform: translateY(-1px); box-shadow: 0 14px 26px -8px rgba(200, 29, 108, 0.6); }
+  .submit-btn:hover{ transform: translateY(-1px); box-shadow: 0 14px 26px -8px rgba(15, 23, 42, 0.6); }
 
   .submit-btn:disabled{
     opacity: 0.6;
@@ -505,10 +486,11 @@
     max-width: 1080px;
     max-height: 88vh;
     background: var(--white);
-    border-radius: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 26px 26px 20px;
     position: relative;
-    box-shadow: 0 30px 60px rgba(71, 16, 58, 0.28);
+    box-shadow: 0 30px 60px rgba(15, 23, 42, 0.16);
     transform: translateY(10px) scale(0.98);
     transition: transform 0.18s ease;
     display: flex;
@@ -551,7 +533,7 @@
   .summary-stat{
     background: var(--blush-100);
     border: 1px solid var(--blush-200);
-    border-radius: 12px;
+    border-radius: var(--radius);
     padding: 8px 14px;
     text-align: center;
     min-width: 128px;
@@ -582,8 +564,8 @@
     flex: 1;
     min-width: 200px;
     background: var(--blush-100);
-    border: 1.5px solid var(--blush-200);
-    border-radius: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 10px 14px;
     font-family: var(--font-body);
     font-size: 13.5px;
@@ -596,7 +578,7 @@
     background: linear-gradient(135deg, var(--pink-500), var(--magenta));
     color: #fff;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius);
     padding: 10px 16px;
     font-family: var(--font-body);
     font-weight: 600;
@@ -610,7 +592,7 @@
     flex: 1;
     overflow: auto;
     border: 1px solid var(--blush-200);
-    border-radius: 14px;
+    border-radius: var(--radius);
   }
 
   table.summary-table{
@@ -644,7 +626,7 @@
     color: var(--ink);
   }
 
-  table.summary-table tbody tr:nth-child(even){ background: #fffafb; }
+  table.summary-table tbody tr:nth-child(even){ background: var(--blush-100); }
   table.summary-table tbody tr:hover{ background: var(--blush-100); }
 
   table.summary-table tfoot td{
@@ -671,9 +653,9 @@
     justify-content: space-between;
     gap: 16px;
     flex-wrap: wrap;
-    background: linear-gradient(135deg, #fff2f6, #ffe3ee);
-    border: 1.5px solid var(--blush-200);
-    border-radius: 14px;
+    background: var(--blush-100);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 14px 18px;
   }
 
@@ -724,9 +706,9 @@
 
   .summary-tab{
     background: var(--blush-100);
-    border: 1.5px solid var(--blush-200);
+    border: 1px solid var(--border);
     color: var(--ink-soft);
-    border-radius: 999px;
+    border-radius: var(--radius);
     padding: 7px 14px;
     font-family: var(--font-body);
     font-size: 12.5px;
@@ -749,7 +731,7 @@
     background: linear-gradient(135deg, var(--pink-500), var(--magenta));
     border-color: transparent;
     color: #fff;
-    box-shadow: 0 6px 14px -6px rgba(200, 29, 108, 0.5);
+    box-shadow: 0 6px 14px -6px rgba(15, 23, 42, 0.5);
   }
 
   .summary-tab.no-data{
@@ -759,7 +741,7 @@
   .summary-errors{
     background: #fff2f2;
     border: 1.5px solid #ffc9c9;
-    border-radius: 12px;
+    border-radius: var(--radius);
     padding: 10px 14px;
     font-size: 12px;
     color: var(--red);
@@ -788,8 +770,8 @@
   .summary-noData-box{
     padding: 46px 24px;
     text-align: center;
-    border: 1.5px dashed var(--blush-200);
-    border-radius: 14px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
     background: var(--blush-100);
     color: var(--ink-soft);
     font-size: 13.5px;
@@ -1231,15 +1213,12 @@
      Heuristik: apakah hasil parse CSV "kelihatan rusak"? Ini terjadi
      kalau ada karakter tanda kutip (") nyangkut di salah satu sel
      sumber, bikin parser CSV standar salah baca batas antar baris
-     (banyak baris data ke-gabung jadi 1 sel raksasa). Cirinya: ada
-     baris dengan 1-2 sel tapi isinya sangat panjang.
+     (banyak baris/sel data ke-gabung jadi 1 sel raksasa). Cirinya:
+     ada SATU SEL (di kolom manapun, row seberapa lebar pun) yang
+     isinya jauh lebih panjang dari wajarnya nama dealer.
      ============================================================ */
   function looksCorrupted(table){
-    return table.some(row => {
-      if (!row || row.length > 3) return false;
-      const joined = row.map(c => (c || "").toString()).join("");
-      return joined.length > 300;
-    });
+    return table.some(row => row && row.some(c => (c || "").toString().length > 200));
   }
 
   async function fetchCategorySheet(cat){
@@ -1271,6 +1250,7 @@
     }
 
     let cols = detectColumns(table);
+    let usedRetry = false;
 
     // Retry: kalau gagal ATAU hasil parse kelihatan rusak (baris ke-gabung
     // karena ada tanda kutip nyangkut di salah satu sel), parse ulang
@@ -1278,17 +1258,20 @@
     // adanya) supaya batas baris kembali benar.
     if (!cols || looksCorrupted(table)){
       const tableNoQuote = Papa.parse(text.trim(), { skipEmptyLines: true, quoteChar: "\u0000" }).data;
-      if (tableNoQuote && tableNoQuote.length > table.length){
+      if (tableNoQuote && tableNoQuote.length > 0){
         const colsRetry = detectColumns(tableNoQuote);
-        if (colsRetry){
+        // Pakai hasil retry kalau: parse asli gagal total, atau retry ini
+        // sudah tidak kelihatan rusak lagi, atau retry dapat baris lebih banyak.
+        if (colsRetry && (!cols || !looksCorrupted(tableNoQuote) || tableNoQuote.length > table.length)){
           table = tableNoQuote;
           cols = colsRetry;
+          usedRetry = true;
         }
       }
     }
 
     if (!cols){
-      throw new Error("Kolom Dealer/Nama tidak ditemukan di \"" + cat.sheetName + "\". Isi baris awal sheet: " + (buildPreview(table) || "(kosong)"));
+      throw new Error("Kolom Dealer/Nama tidak ditemukan di \"" + cat.sheetName + "\" (sudah dicoba parse ulang). Isi baris awal sheet: " + (buildPreview(table) || "(kosong)"));
     }
 
     const { headerIdx, kodeIdx, dealerIdx, valueIdx } = cols;
