@@ -1076,10 +1076,16 @@
     let headerIdx = -1, kodeIdx = -1, dealerIdx = -1, valueIdx = -1;
     const scanLimit = Math.min(table.length, 25);
 
+    // Header kolom asli itu label pendek ("Dealer", "Kode Dealer", "NAMA
+    // DEALER"). Judul section gabungan spt "PEMBAYARAN BONUS DEALER" atau
+    // "SALDO AWAL BONUS SISTEM" jauh lebih panjang -> batasi panjang teks
+    // supaya tidak salah kedeteksi sbg nama kolom.
+    const isShortLabel = (c, keyword) => c.includes(keyword) && c.length <= 20;
+
     function pickValueCol(row){
       const valCandidates = row
         .map((c, idx) => ({ idx, c }))
-        .filter(o => /saldo|total|jumlah|nominal|nilai/.test(o.c));
+        .filter(o => /saldo|total|jumlah|nominal|nilai/.test(o.c) && o.c.length <= 25);
       if (!valCandidates.length) return -1;
       const sisa = valCandidates.find(o => o.c.includes("sisa"));
       return (sisa || valCandidates[valCandidates.length - 1]).idx;
@@ -1097,8 +1103,8 @@
         if (vIdx > -1){
           headerIdx = i;
           valueIdx = vIdx;
-          kodeIdx = row.findIndex(c => c.includes("kode"));
-          dealerIdx = row.findIndex(c => c.includes("dealer") || c.includes("nama"));
+          kodeIdx = row.findIndex(c => isShortLabel(c, "kode"));
+          dealerIdx = row.findIndex(c => isShortLabel(c, "dealer") || isShortLabel(c, "nama"));
           if (dealerIdx === -1){
             dealerIdx = row.findIndex((c, idx) => idx !== vIdx && c.trim() !== "");
           }
@@ -1112,11 +1118,11 @@
     if (headerIdx === -1){
       for (let i = 0; i < scanLimit; i++){
         const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
-        const dIdx = row.findIndex(c => c.includes("dealer") && !c.includes("kode"));
+        const dIdx = row.findIndex(c => isShortLabel(c, "dealer") && !c.includes("kode"));
         if (dIdx > -1){
           headerIdx = i;
           dealerIdx = dIdx;
-          kodeIdx = row.findIndex(c => c.includes("kode"));
+          kodeIdx = row.findIndex(c => isShortLabel(c, "kode"));
           valueIdx = pickValueCol(row);
           break;
         }
@@ -1126,11 +1132,11 @@
     if (headerIdx === -1){
       for (let i = 0; i < scanLimit; i++){
         const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
-        const nIdx = row.findIndex(c => c.includes("nama"));
+        const nIdx = row.findIndex(c => isShortLabel(c, "nama"));
         if (nIdx > -1){
           headerIdx = i;
           dealerIdx = nIdx;
-          kodeIdx = row.findIndex(c => c.includes("kode"));
+          kodeIdx = row.findIndex(c => isShortLabel(c, "kode"));
           valueIdx = pickValueCol(row);
           break;
         }
@@ -1141,7 +1147,7 @@
     if (headerIdx === -1){
       for (let i = 0; i < scanLimit; i++){
         const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
-        const kdIdx = row.findIndex(c => c.includes("dealer"));
+        const kdIdx = row.findIndex(c => isShortLabel(c, "dealer"));
         if (kdIdx > -1){
           headerIdx = i;
           dealerIdx = kdIdx;
@@ -1193,7 +1199,7 @@
       }
 
       const headerRowText = (table[guessHeaderIdx] || []).map(c => (c || "").toString().trim().toLowerCase());
-      let guessKodeIdx = headerRowText.findIndex(c => c.includes("kode"));
+      let guessKodeIdx = headerRowText.findIndex(c => c.includes("kode") && c.length <= 20);
 
       let bestNameIdx = -1, bestNameScore = -1;
       stats.forEach((st, idx) => {
