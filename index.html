@@ -944,31 +944,40 @@
   const DEPT_LABEL = { admin: "Admin", claim: "Claim", marketing: "Marketing", tsd: "TSD" };
 
   /* ============================================================
-     DAFTAR 13 KATEGORI REKAP KESELURUHAN
-     dept      : kunci ke SPREADSHEET_IDS (departemen sumber)
-     sheetName : nama sheet/tab persis di spreadsheet sumber
-     asIs      : true = sheet sumber SUDAH berupa rekap sisa saldo
-                 final -> tampilkan apa adanya, jangan dijumlah ulang
-                 per baris duplikat (ambil nilai terakhir).
-                 false = boleh dijumlahkan bila ada baris duplikat
-                 per dealer (data mentah/transaksi).
+     DAFTAR 14 KATEGORI REKAP KESELURUHAN (urutan & label kolom
+     PERSIS mengikuti file Format_Rekap_Sisa_Saldo.xlsx yang jadi acuan
+     tampilan Matrix/Rekap Keseluruhan dan file Excel unduhan).
+     dept        : kunci ke SPREADSHEET_IDS (departemen sumber)
+     sheetName   : nama sheet/tab persis di spreadsheet sumber
+     matrixLabel : nama kolom persis seperti di file rekap acuan
+     asIs        : true = sheet sumber SUDAH berupa rekap sisa saldo
+                   final -> tampilkan apa adanya, jangan dijumlah ulang
+                   per baris duplikat (ambil nilai terakhir).
+                   false = boleh dijumlahkan bila ada baris duplikat
+                   per dealer (data mentah/transaksi).
+     Catatan: XP2 & XP3 sumbernya 1 sheet yg sama ("XP2 XP3") tapi
+     ditampilkan sbg 2 kolom terpisah sesuai format acuan -> di-fetch
+     2x dgn valueHeaderMatch berbeda ("XP2" / "XP3").
      ============================================================ */
   const SHEET_CATEGORIES = [
-    { id: "bsistem",   label: "1. Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: false },
-    { id: "btactical", label: "2. Bonus Tactical",     dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
-    { id: "bdev",      label: "3. Bonus Development",  dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
-    { id: "pxp1",      label: "4. Pengembalian XP1",   dept: "claim",     sheetName: "Pengembalian XP1",        asIs: true,
+    { id: "bsistem",   label: "1. Bonus Sistem",       matrixLabel: "Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: false },
+    { id: "btactical", label: "2. Bonus Tactical",     matrixLabel: "Bonus Tactical",      dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
+    { id: "bdev",      label: "3. Bonus Development",  matrixLabel: "Bonus Development",   dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
+    { id: "xp1",       label: "4. XP1",                matrixLabel: "XP1",                 dept: "claim",     sheetName: "XP1",                     asIs: false },
+    { id: "xp2",       label: "5. XP2",                matrixLabel: "XP2",                 dept: "admin",     sheetName: "XP2 XP3",                 asIs: false,
+      valueHeaderMatch: "XP2" },
+    { id: "xp3",       label: "6. XP3",                matrixLabel: "XP3",                 dept: "admin",     sheetName: "XP2 XP3",                 asIs: false,
+      valueHeaderMatch: "XP3" },
+    { id: "pxp1",      label: "7. Pengembalian XP1",   matrixLabel: "Pengembalian XP 1",   dept: "claim",     sheetName: "Pengembalian XP1",        asIs: true,
       valueHeaderMatch: "Periode SSU Des 22-Des 23" },
-    { id: "xp1",       label: "5. XP1",                dept: "claim",     sheetName: "XP1",                     asIs: false },
-    { id: "xp23",      label: "6. XP2 & XP3",          dept: "admin",     sheetName: "XP2 XP3",                 asIs: false },
-    { id: "scp",       label: "7. SCP",                dept: "claim",     sheetName: "SCP",                     asIs: false },
-    { id: "dg",        label: "8. DG",                 dept: "claim",     sheetName: "DG",                      asIs: false },
-    { id: "gc",        label: "9. GC",                 dept: "claim",     sheetName: "GC",                      asIs: false },
-    { id: "kpb",       label: "10. KPB",               dept: "claim",     sheetName: "KPB",                     asIs: false },
-    { id: "btl",       label: "11. BTL",               dept: "claim",     sheetName: "BTL",                     asIs: false },
-    { id: "lcr",       label: "12. LCR",               dept: "claim",     sheetName: "LCR",                     asIs: false,
+    { id: "scp",       label: "8. SCP",                matrixLabel: "SCP",                 dept: "claim",     sheetName: "SCP",                     asIs: false },
+    { id: "dg",        label: "9. DG",                 matrixLabel: "DG",                  dept: "claim",     sheetName: "DG",                      asIs: false },
+    { id: "gc",        label: "10. GC",                matrixLabel: "GC",                  dept: "claim",     sheetName: "GC",                      asIs: false },
+    { id: "btl",       label: "11. BTL",               matrixLabel: "BTL",                 dept: "claim",     sheetName: "BTL",                     asIs: false },
+    { id: "lcr",       label: "12. LCR",               matrixLabel: "LCR",                 dept: "claim",     sheetName: "LCR",                     asIs: false,
       valueHeaderMatch: "Amount", combinedKodeDealer: true },
-    { id: "ahass",     label: "13. Bonus AHASS",       dept: "tsd",       sheetName: "Sisa Saldo",              asIs: true  }
+    { id: "kpb",       label: "13. KPB",               matrixLabel: "KPB",                 dept: "claim",     sheetName: "KPB",                     asIs: false },
+    { id: "ahass",     label: "14. Bonus AHASS",       matrixLabel: "BONUS AHASS",         dept: "tsd",       sheetName: "Sisa Saldo",              asIs: true  }
   ];
 
   const MATRIX_ID = "matrix";
@@ -1497,7 +1506,7 @@
       <th>No</th>
       <th>Kode Dealer</th>
       <th>Nama Dealer</th>
-      <th class="num" id="summaryValueHeader">${cat.label.replace(/^\d+\.\s*/, "")}</th>
+      <th class="num" id="summaryValueHeader">${cat.matrixLabel}</th>
     `;
     summaryTfootRow.innerHTML = `
       <td colspan="3">TOTAL KATEGORI INI</td>
@@ -1533,32 +1542,27 @@
   function renderMatrixTable(filterText){
     summaryTable.classList.add("matrix-view");
     summaryTableWrap.style.display = "";
-    summaryNote.innerHTML = `Tabel gabungan semua 13 kategori (seperti Excel rekap). Baris = union seluruh dealer dari semua sheet sumber, dicocokkan via Kode Dealer.`;
+    summaryNote.innerHTML = `Format mengikuti Rekap Sisa Saldo Dealer (NO, NAMA DEALER, ${SHEET_CATEGORIES.length} kolom kategori). Diurutkan A-Z, dicocokkan lintas sheet via Kode Dealer / nama dealer.`;
     summaryTheadRow.innerHTML = `
-      <th>No</th>
-      <th>Kode Dealer</th>
-      <th>Dealer</th>
-      ${SHEET_CATEGORIES.map(cat => `<th class="num">${cat.label.replace(/^\d+\.\s*/, "")}</th>`).join("")}
-      <th class="num total-col">TOTAL</th>
+      <th>NO</th>
+      <th>NAMA DEALER</th>
+      ${SHEET_CATEGORIES.map(cat => `<th class="num">${cat.matrixLabel}</th>`).join("")}
     `;
     summaryTfootRow.innerHTML = `
-      <td colspan="${2 + 1}">GRAND TOTAL</td>
+      <td colspan="2">TOTAL</td>
       ${SHEET_CATEGORIES.map(cat => `<td class="num" data-foot="${cat.id}">-</td>`).join("")}
-      <td class="num total-col" id="summaryFootTotal">-</td>
     `;
 
-    const rows = filteredLiveRows(filterText).sort((a, b) => b.total - a.total);
+    const rows = filteredLiveRows(filterText).sort((a, b) => a.dealer.localeCompare(b.dealer, "id"));
 
     if (rows.length === 0){
-      summaryTbody.innerHTML = `<tr><td colspan="${3 + SHEET_CATEGORIES.length + 1}" class="summary-empty">Tidak ada dealer yang cocok dengan pencarian.</td></tr>`;
+      summaryTbody.innerHTML = `<tr><td colspan="${2 + SHEET_CATEGORIES.length}" class="summary-empty">Tidak ada dealer yang cocok dengan pencarian.</td></tr>`;
     } else {
       summaryTbody.innerHTML = rows.map((r, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td>${r.kode || "-"}</td>
           <td>${r.dealer}</td>
           ${SHEET_CATEGORIES.map(cat => `<td class="num">${rupiah(r.values[cat.id] || 0)}</td>`).join("")}
-          <td class="num total-col">${rupiah(r.total)}</td>
         </tr>
       `).join("");
     }
@@ -1574,7 +1578,6 @@
       const el = summaryTfootRow.querySelector(`[data-foot="${cat.id}"]`);
       if (el) el.textContent = rupiah(catTotals[cat.id]);
     });
-    document.getElementById("summaryFootTotal").textContent = rupiah(grandTotal);
     statDealerCount.textContent = rows.length;
     statGrandTotal.textContent = rupiah(grandTotal);
   }
@@ -1722,27 +1725,42 @@
       return;
     }
     try {
-      const summarySheetRows = [
-        ["NO", "Kode Dealer", "DEALER", ...SHEET_CATEGORIES.map(c => c.label.replace(/^\d+\.\s*/, "")), "TOTAL"]
+      const catCount = SHEET_CATEGORIES.length;
+      const sortedRows = [...liveDealerRows].sort((a, b) => a.dealer.localeCompare(b.dealer, "id"));
+
+      const headerRow1 = ["NO", "NAMA DEALER", "SISA SALDO DANA DEALER", ...Array(catCount - 1).fill("")];
+      const headerRow2 = ["", "", ...SHEET_CATEGORIES.map(c => c.matrixLabel)];
+      const dataRows = sortedRows.map((r, i) => [i + 1, r.dealer, ...SHEET_CATEGORIES.map(c => r.values[c.id] || 0)]);
+      const totalRowIdx = 2 + dataRows.length; // 0-based aoa index utk baris TOTAL
+
+      const aoa = [headerRow1, headerRow2, ...dataRows, ["TOTAL", ""]];
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws["!merges"] = [
+        { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },           // A1:A2 -> NO
+        { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },           // B1:B2 -> NAMA DEALER
+        { s: { r: 0, c: 2 }, e: { r: 0, c: 2 + catCount - 1 } }, // C1:.. -> judul SISA SALDO DANA DEALER
+        { s: { r: totalRowIdx, c: 0 }, e: { r: totalRowIdx, c: 1 } } // TOTAL span NO+NAMA DEALER
       ];
-      liveDealerRows.forEach((r, i) => {
-        summarySheetRows.push([
-          i + 1,
-          r.kode || "-",
-          r.dealer,
-          ...SHEET_CATEGORIES.map(c => r.values[c.id] || 0),
-          r.total
-        ]);
+      const totalRowExcelNum = totalRowIdx + 1;
+      const firstDataRowExcel = 3;
+      const lastDataRowExcel = 2 + dataRows.length;
+      SHEET_CATEGORIES.forEach((cat, ci) => {
+        const colLetter = XLSX.utils.encode_col(2 + ci);
+        ws[colLetter + totalRowExcelNum] = {
+          t: "n",
+          f: `SUM(${colLetter}${firstDataRowExcel}:${colLetter}${lastDataRowExcel})`
+        };
       });
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summarySheetRows), "Summary");
+      XLSX.utils.book_append_sheet(wb, ws, "Summary");
       SHEET_CATEGORIES.forEach(cat => {
-        const detailRows = [["No", "Kode Dealer", "Nama Dealer", cat.label.replace(/^\d+\.\s*/, "")]];
+        const detailRows = [["No", "Kode Dealer", "Nama Dealer", cat.matrixLabel]];
         liveDealerRows
           .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
           .sort((a, b) => b.value - a.value)
           .forEach((r, i) => detailRows.push([i + 1, r.kode || "-", r.dealer, r.value]));
-        const sheetName = cat.label.replace(/^\d+\.\s*/, "").slice(0, 31);
+        const sheetName = cat.matrixLabel.slice(0, 31);
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailRows), sheetName);
       });
       XLSX.writeFile(wb, "Rekap_Keseluruhan_Sisa_Saldo_Dealer.xlsx");
@@ -1754,10 +1772,10 @@
   summaryCsvBtn.addEventListener("click", () => {
     if (isFetching) return;
     if (activeCategory === MATRIX_ID){
-      const header = ["No", "Kode Dealer", "Dealer", ...SHEET_CATEGORIES.map(c => c.label.replace(/^\d+\.\s*/, "")), "Total"];
-      const sorted = [...liveDealerRows].sort((a, b) => b.total - a.total);
+      const header = ["NO", "NAMA DEALER", ...SHEET_CATEGORIES.map(c => c.matrixLabel)];
+      const sorted = [...liveDealerRows].sort((a, b) => a.dealer.localeCompare(b.dealer, "id"));
       const lines = [header.join(";")].concat(
-        sorted.map((r, i) => [i + 1, r.kode || "-", r.dealer, ...SHEET_CATEGORIES.map(c => r.values[c.id] || 0), r.total].join(";"))
+        sorted.map((r, i) => [i + 1, r.dealer, ...SHEET_CATEGORIES.map(c => r.values[c.id] || 0)].join(";"))
       );
       const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
@@ -1768,7 +1786,7 @@
       return;
     }
     const cat = SHEET_CATEGORIES.find(c => c.id === activeCategory);
-    const header = ["No", "Kode Dealer", "Nama Dealer", cat.label.replace(/^\d+\.\s*/, "")];
+    const header = ["No", "Kode Dealer", "Nama Dealer", cat.matrixLabel];
     const sorted = liveDealerRows
       .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
       .sort((a, b) => b.value - a.value);
