@@ -900,7 +900,7 @@
         <strong>Data Live dari Google Sheets</strong>
         <span>Ditarik otomatis dari 13 kategori (Admin, Claim, Marketing, TSD) setiap kali modal ini dibuka. Klik "Refresh" untuk menarik ulang data terbaru.</span>
         <span class="summary-excel-updated" id="excelUpdatedAt">Terakhir diperbarui: -</span>
-        <span class="summary-build-version">Versi kode: BUILD-2026-07-29-05</span>
+        <span class="summary-build-version">Versi kode: BUILD-2026-07-29-06</span>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button type="button" class="summary-btn" id="summaryRefreshBtn">⟳ Refresh</button>
@@ -997,8 +997,8 @@
       valueHeaderMatch: "Amount", combinedKodeDealer: true },
     { id: "kpb",       label: "13. KPB",               matrixLabel: "KPB",                 dept: "claim",     sheetName: "KPB",                     asIs: true,
       valueHeaderMatch: "Total" },
-    { id: "ahass",     label: "14. Bonus AHASS",       matrixLabel: "BONUS AHASS",         dept: "tsd",       sheetName: "Sisa Bonus",              asIs: true,
-      fixedDealerColLetter: "C", fixedValueColLetter: "AB", fixedKodeColLetter: "B", fixedHeaderRow: 3 }
+    { id: "ahass",     label: "14. Bonus AHASS",       matrixLabel: "BONUS AHASS",         dept: "tsd",       sheetName: "Sisa Bonus",              asIs: false,
+      fixedDealerColLetter: "C", fixedValueColLetter: "AB", fixedHeaderRow: 3 }
   ];
 
   const MATRIX_ID = "matrix";
