@@ -970,10 +970,10 @@
     { id: "btactical", label: "2. Bonus Tactical",     matrixLabel: "Bonus Tactical",      dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
     { id: "bdev",      label: "3. Bonus Development",  matrixLabel: "Bonus Development",   dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
     { id: "xp1",       label: "4. XP1",                matrixLabel: "XP1",                 dept: "claim",     sheetName: "XP1",                     asIs: false },
-    { id: "xp2",       label: "5. XP2",                matrixLabel: "XP2",                 dept: "admin",     sheetName: "XP2 XP3",                 asIs: false,
-      valueHeaderMatch: "XP2" },
-    { id: "xp3",       label: "6. XP3",                matrixLabel: "XP3",                 dept: "admin",     sheetName: "XP2 XP3",                 asIs: false,
-      valueHeaderMatch: "XP3" },
+    { id: "xp2",       label: "5. XP2",                matrixLabel: "XP2",                 dept: "admin",     sheetName: "XP2 XP3",                 asIs: true,
+      valueHeaderMatch: "TOTAL SISA SALDO XP2" },
+    { id: "xp3",       label: "6. XP3",                matrixLabel: "XP3",                 dept: "admin",     sheetName: "XP2 XP3",                 asIs: true,
+      valueHeaderMatch: "TOTAL SISA SALDO XP3" },
     { id: "pxp1",      label: "7. Pengembalian XP1",   matrixLabel: "Pengembalian XP 1",   dept: "claim",     sheetName: "Pengembalian XP1",        asIs: true,
       valueHeaderMatch: "Periode SSU Des 22-Des 23" },
     { id: "scp",       label: "8. SCP",                matrixLabel: "SCP",                 dept: "claim",     sheetName: "SCP",                     asIs: false },
@@ -1120,14 +1120,36 @@
       const target = cat.valueHeaderMatch.toString().trim().toLowerCase().replace(/\s+/g, " ");
       for (let i = 0; i < scanLimit; i++){
         const row = table[i].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
-        const vIdx = row.findIndex(c => c.includes(target));
+        let vIdx = row.findIndex(c => c.includes(target));
+        let matchRowIdx = i;
+
+        // Kalau tidak ketemu di 1 baris ini, coba gabungan baris ini +
+        // baris berikutnya per-kolom -> menangani header yg judul group &
+        // label kolomnya ada di 2 baris FISIK terpisah (mis. baris atas
+        // "TOTAL SISA SALDO" (merge beberapa kolom), baris bawah "XP2"/"XP3"
+        // per kolom) -> gabungan per kolom jadi "total sisa saldo xp2".
+        if (vIdx === -1 && i + 1 < scanLimit && table[i + 1]){
+          const nextRow = table[i + 1].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
+          // Isi kolom kosong di baris judul group dgn judul terakhir yg
+          // ketemu di sebelah kirinya -> meniru perilaku sel merge (CSV
+          // export cuma naruh teks di sel plg kiri-atas dr suatu merge).
+          let lastTitle = "";
+          const rowFilled = row.map(c => { if (c && c.trim() !== "") lastTitle = c; return lastTitle; });
+          const width = Math.max(rowFilled.length, nextRow.length);
+          for (let c = 0; c < width; c++){
+            const combined = ((rowFilled[c] || "") + " " + (nextRow[c] || "")).trim();
+            if (combined.includes(target)){ vIdx = c; matchRowIdx = i + 1; break; }
+          }
+        }
+
         if (vIdx > -1){
-          headerIdx = i;
+          headerIdx = matchRowIdx;
           valueIdx = vIdx;
-          kodeIdx = row.findIndex(c => isShortLabel(c, "kode"));
-          dealerIdx = row.findIndex(c => isShortLabel(c, "dealer") || isShortLabel(c, "nama"));
+          const dealerRow = table[matchRowIdx].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
+          kodeIdx = dealerRow.findIndex(c => isShortLabel(c, "kode"));
+          dealerIdx = dealerRow.findIndex(c => isShortLabel(c, "dealer") || isShortLabel(c, "nama"));
           if (dealerIdx === -1){
-            dealerIdx = row.findIndex((c, idx) => idx !== vIdx && c.trim() !== "");
+            dealerIdx = dealerRow.findIndex((c, idx) => idx !== vIdx && c.trim() !== "");
           }
           if (dealerIdx === -1) dealerIdx = 0;
           break;
