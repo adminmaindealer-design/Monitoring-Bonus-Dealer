@@ -960,7 +960,7 @@
      ============================================================ */
   const SHEET_CATEGORIES = [
     { id: "bsistem",   label: "1. Bonus Sistem",       matrixLabel: "Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: true,
-      valueHeaderMatch: "TOTAL KESELURUHAN" },
+      valueHeaderMatch: "TOTAL KESELURUHAN", useLastColumnAsValue: true },
     { id: "btactical", label: "2. Bonus Tactical",     matrixLabel: "Bonus Tactical",      dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
     { id: "bdev",      label: "3. Bonus Development",  matrixLabel: "Bonus Development",   dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
     { id: "xp1",       label: "4. XP1",                matrixLabel: "XP1",                 dept: "claim",     sheetName: "XP1",                     asIs: false },
@@ -1249,7 +1249,18 @@
     }
 
     if (headerIdx === -1) return null;
-    if (valueIdx === -1){
+
+    // Override posisi: kalau kategori ini ditandai "kolom nilainya pasti
+    // paling kanan sheet" (dipakai utk sheet yg teks header kolom totalnya
+    // tidak reliable dicocokkan via teks, mis. ada karakter tersembunyi/
+    // enter di dalam sel), langsung pakai kolom PALING LEBAR di antara
+    // beberapa baris header pertama -> hasilnya presisi tanpa perlu cocokkan
+    // teks header sama sekali.
+    if (cat && cat.useLastColumnAsValue){
+      const scanRows = table.slice(0, Math.min(table.length, 6));
+      const widest = Math.max(...scanRows.map(r => (r || []).length), 1);
+      valueIdx = widest - 1;
+    } else if (valueIdx === -1){
       // fallback: kolom numerik terakhir pada baris header (paling kanan)
       valueIdx = table[headerIdx].length - 1;
     }
