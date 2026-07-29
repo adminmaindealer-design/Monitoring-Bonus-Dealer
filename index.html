@@ -792,6 +792,12 @@
     color: var(--ink-soft);
     line-height: 1.5;
   }
+  .summary-debug{
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink-soft);
+    opacity: 0.85;
+  }
 
   @media (max-width: 720px){
     .summary-modal{ padding: 20px 16px 16px; max-height: 92vh; }
@@ -985,6 +991,7 @@
   let activeCategory = MATRIX_ID;
   let liveDealerRows = [];       // union rows built from fetched sheets: { kode, dealer, values:{catId: number}, total }
   let categoryErrors = [];       // [{ catId, label, message }]
+  let lastFetchDebug = {};       // { catId: { headerRowNumber, dealerColLetter, valueColLetter, sampleDealer, sampleRawValue, ... } }
   let lastFetchedAt = null;
   let isFetching = false;
 
@@ -1055,8 +1062,22 @@
   }
 
   function csvUrlFor(spreadsheetId, sheetName){
+    // &_ts= cache-buster: jaga-jaga browser/CDN nge-cache respons CSV lama,
+    // supaya tombol Refresh selalu benar-benar tarik data terbaru.
     return "https://docs.google.com/spreadsheets/d/" + spreadsheetId +
-      "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(sheetName);
+      "/gviz/tq?tqx=out:csv&sheet=" + encodeURIComponent(sheetName) +
+      "&_ts=" + Date.now();
+  }
+
+  function colIndexToLetter(idx){
+    if (idx == null || idx < 0) return "-";
+    let n = idx + 1, s = "";
+    while (n > 0){
+      const rem = (n - 1) % 26;
+      s = String.fromCharCode(65 + rem) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
   }
 
   /* ============================================================
@@ -1291,7 +1312,7 @@
     const url = csvUrlFor(spreadsheetId, cat.sheetName);
     let res;
     try {
-      res = await fetch(url, { credentials: "omit" });
+      res = await fetch(url, { credentials: "omit", cache: "no-store" });
     } catch (networkErr){
       if (location.protocol === "file:"){
         throw new Error("Gagal konek: file dibuka langsung (file://). Buka index.html lewat web server/hosting (mis. GitHub Pages, Netlify, atau 'python -m http.server'), bukan double-click file.");
@@ -1338,6 +1359,21 @@
     }
 
     const { headerIdx, kodeIdx, dealerIdx, valueIdx } = cols;
+
+    // Info debug: simpan supaya bisa ditampilkan di UI tab kategori ybs,
+    // biar kalau nilai masih meleset, ketauan persis kolom mana yg
+    // sebenarnya kebaca sistem (bukan tebak-tebakan lagi).
+    const sampleRow = table.slice(headerIdx + 1).find(r => r && (r[dealerIdx] || "").toString().trim() !== "");
+    lastFetchDebug[cat.id] = {
+      headerRowNumber: headerIdx + 1,
+      totalColsAtHeader: (table[headerIdx] || []).length,
+      dealerColLetter: colIndexToLetter(dealerIdx),
+      valueColLetter: colIndexToLetter(valueIdx),
+      sampleDealer: sampleRow ? (sampleRow[dealerIdx] || "").toString().trim() : "(tidak ada)",
+      sampleRawValue: sampleRow ? JSON.stringify(sampleRow[valueIdx]) : "(tidak ada)",
+      usedRetry
+    };
+
     const out = [];
     for (let i = headerIdx + 1; i < table.length; i++){
       const row = table[i];
@@ -1418,6 +1454,7 @@
     if (isFetching) return;
     isFetching = true;
     categoryErrors = [];
+    lastFetchDebug = {};
     renderSummaryErrors();
     const perCategoryRows = {};
 
@@ -1530,7 +1567,11 @@
     `;
 
     summaryTableWrap.style.display = "";
-    summaryNote.innerHTML = `Data ditarik LIVE dari sheet "${cat.sheetName}" (sumber: Departemen ${DEPT_LABEL[cat.dept]})${cat.asIs ? " &mdash; nilai ditampilkan apa adanya, tanpa agregasi ulang." : "."}`;
+    const dbg = lastFetchDebug[cat.id];
+    const dbgLine = dbg
+      ? `<br><span class="summary-debug">🔧 Debug: header di baris sheet #${dbg.headerRowNumber}, kolom Dealer = <b>${dbg.dealerColLetter}</b>, kolom Nilai = <b>${dbg.valueColLetter}</b> (dari ${dbg.totalColsAtHeader} kolom). Contoh baris pertama: "${dbg.sampleDealer}" = ${dbg.sampleRawValue}${dbg.usedRetry ? " (pakai mode parse-ulang)" : ""}</span>`
+      : "";
+    summaryNote.innerHTML = `Data ditarik LIVE dari sheet "${cat.sheetName}" (sumber: Departemen ${DEPT_LABEL[cat.dept]})${cat.asIs ? " &mdash; nilai ditampilkan apa adanya, tanpa agregasi ulang." : "."}${dbgLine}`;
 
     const rows = filteredLiveRows(filterText)
       .map(r => ({ dealer: r.dealer, value: r.values[cat.id] || 0 }))
