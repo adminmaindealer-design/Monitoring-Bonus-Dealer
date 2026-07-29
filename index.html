@@ -960,7 +960,8 @@
      2x dgn valueHeaderMatch berbeda ("XP2" / "XP3").
      ============================================================ */
   const SHEET_CATEGORIES = [
-    { id: "bsistem",   label: "1. Bonus Sistem",       matrixLabel: "Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: false },
+    { id: "bsistem",   label: "1. Bonus Sistem",       matrixLabel: "Bonus Sistem",       dept: "admin",     sheetName: "Sisa Saldo Bonus Sistem", asIs: true,
+      valueHeaderMatch: "TOTAL KESELURUHAN" },
     { id: "btactical", label: "2. Bonus Tactical",     matrixLabel: "Bonus Tactical",      dept: "marketing", sheetName: "Bonus Tactical",          asIs: true  },
     { id: "bdev",      label: "3. Bonus Development",  matrixLabel: "Bonus Development",   dept: "marketing", sheetName: "Bonus Development",       asIs: true  },
     { id: "xp1",       label: "4. XP1",                matrixLabel: "XP1",                 dept: "claim",     sheetName: "XP1",                     asIs: false },
