@@ -908,7 +908,6 @@
         <thead>
           <tr id="summaryTheadRow">
             <th>No</th>
-            <th>Kode Dealer</th>
             <th>Nama Dealer</th>
             <th class="num" id="summaryValueHeader">Sisa Saldo</th>
           </tr>
@@ -916,7 +915,7 @@
         <tbody id="summaryTbody"></tbody>
         <tfoot>
           <tr id="summaryTfootRow">
-            <td colspan="3">TOTAL SHEET INI</td>
+            <td colspan="2">TOTAL SHEET INI</td>
             <td class="num" id="summaryFootTotal">-</td>
           </tr>
         </tfoot>
@@ -1097,9 +1096,9 @@
     // nilai bukan "saldo/total" tapi nama periode/"Amount"), cari kolom
     // itu dulu sebelum coba tebak generik.
     if (cat && cat.valueHeaderMatch){
-      const target = cat.valueHeaderMatch.toString().trim().toLowerCase();
+      const target = cat.valueHeaderMatch.toString().trim().toLowerCase().replace(/\s+/g, " ");
       for (let i = 0; i < scanLimit; i++){
-        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
         const vIdx = row.findIndex(c => c.includes(target));
         if (vIdx > -1){
           headerIdx = i;
@@ -1118,7 +1117,7 @@
     // Pass 1: cari kolom yang jelas bernama "dealer" (bukan gabungan "kode dealer")
     if (headerIdx === -1){
       for (let i = 0; i < scanLimit; i++){
-        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
         const dIdx = row.findIndex(c => isShortLabel(c, "dealer") && !c.includes("kode"));
         if (dIdx > -1){
           headerIdx = i;
@@ -1132,7 +1131,7 @@
     // Pass 2: fallback ke kolom "nama" (mis. "Nama Dealer/Toko" ditulis beda)
     if (headerIdx === -1){
       for (let i = 0; i < scanLimit; i++){
-        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
         const nIdx = row.findIndex(c => isShortLabel(c, "nama"));
         if (nIdx > -1){
           headerIdx = i;
@@ -1147,7 +1146,7 @@
     // -> pakai kolom "kode dealer" itu juga sbg nama (drpd gagal total)
     if (headerIdx === -1){
       for (let i = 0; i < scanLimit; i++){
-        const row = table[i].map(c => (c || "").toString().trim().toLowerCase());
+        const row = table[i].map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
         const kdIdx = row.findIndex(c => isShortLabel(c, "dealer"));
         if (kdIdx > -1){
           headerIdx = i;
@@ -1199,7 +1198,7 @@
         stats.push(st);
       }
 
-      const headerRowText = (table[guessHeaderIdx] || []).map(c => (c || "").toString().trim().toLowerCase());
+      const headerRowText = (table[guessHeaderIdx] || []).map(c => (c || "").toString().trim().toLowerCase().replace(/\s+/g, " "));
       let guessKodeIdx = headerRowText.findIndex(c => c.includes("kode") && c.length <= 20);
 
       let bestNameIdx = -1, bestNameScore = -1;
@@ -1511,12 +1510,11 @@
     summaryTable.classList.remove("matrix-view");
     summaryTheadRow.innerHTML = `
       <th>No</th>
-      <th>Kode Dealer</th>
       <th>Nama Dealer</th>
       <th class="num" id="summaryValueHeader">${cat.matrixLabel}</th>
     `;
     summaryTfootRow.innerHTML = `
-      <td colspan="3">TOTAL KATEGORI INI</td>
+      <td colspan="2">TOTAL KATEGORI INI</td>
       <td class="num" id="summaryFootTotal">-</td>
     `;
 
@@ -1524,16 +1522,15 @@
     summaryNote.innerHTML = `Data ditarik LIVE dari sheet "${cat.sheetName}" (sumber: Departemen ${DEPT_LABEL[cat.dept]})${cat.asIs ? " &mdash; nilai ditampilkan apa adanya, tanpa agregasi ulang." : "."}`;
 
     const rows = filteredLiveRows(filterText)
-      .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
+      .map(r => ({ dealer: r.dealer, value: r.values[cat.id] || 0 }))
       .sort((a, b) => b.value - a.value);
 
     if (rows.length === 0){
-      summaryTbody.innerHTML = `<tr><td colspan="4" class="summary-empty">Tidak ada dealer yang cocok dengan pencarian.</td></tr>`;
+      summaryTbody.innerHTML = `<tr><td colspan="3" class="summary-empty">Tidak ada dealer yang cocok dengan pencarian.</td></tr>`;
     } else {
       summaryTbody.innerHTML = rows.map((r, i) => `
         <tr>
           <td>${i + 1}</td>
-          <td>${r.kode || "-"}</td>
           <td>${r.dealer}</td>
           <td class="num">${rupiah(r.value)}</td>
         </tr>
@@ -1762,11 +1759,11 @@
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Summary");
       SHEET_CATEGORIES.forEach(cat => {
-        const detailRows = [["No", "Kode Dealer", "Nama Dealer", cat.matrixLabel]];
+        const detailRows = [["No", "Nama Dealer", cat.matrixLabel]];
         liveDealerRows
-          .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
+          .map(r => ({ dealer: r.dealer, value: r.values[cat.id] || 0 }))
           .sort((a, b) => b.value - a.value)
-          .forEach((r, i) => detailRows.push([i + 1, r.kode || "-", r.dealer, r.value]));
+          .forEach((r, i) => detailRows.push([i + 1, r.dealer, r.value]));
         const sheetName = cat.matrixLabel.slice(0, 31);
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailRows), sheetName);
       });
@@ -1793,12 +1790,12 @@
       return;
     }
     const cat = SHEET_CATEGORIES.find(c => c.id === activeCategory);
-    const header = ["No", "Kode Dealer", "Nama Dealer", cat.matrixLabel];
+    const header = ["No", "Nama Dealer", cat.matrixLabel];
     const sorted = liveDealerRows
-      .map(r => ({ kode: r.kode, dealer: r.dealer, value: r.values[cat.id] || 0 }))
+      .map(r => ({ dealer: r.dealer, value: r.values[cat.id] || 0 }))
       .sort((a, b) => b.value - a.value);
     const lines = [header.join(";")].concat(
-      sorted.map((r, i) => [i + 1, r.kode || "-", r.dealer, r.value].join(";"))
+      sorted.map((r, i) => [i + 1, r.dealer, r.value].join(";"))
     );
     const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
