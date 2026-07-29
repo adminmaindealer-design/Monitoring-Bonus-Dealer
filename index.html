@@ -900,7 +900,7 @@
         <strong>Data Live dari Google Sheets</strong>
         <span>Ditarik otomatis dari 13 kategori (Admin, Claim, Marketing, TSD) setiap kali modal ini dibuka. Klik "Refresh" untuk menarik ulang data terbaru.</span>
         <span class="summary-excel-updated" id="excelUpdatedAt">Terakhir diperbarui: -</span>
-        <span class="summary-build-version">Versi kode: BUILD-2026-07-29-03</span>
+        <span class="summary-build-version">Versi kode: BUILD-2026-07-29-04</span>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button type="button" class="summary-btn" id="summaryRefreshBtn">⟳ Refresh</button>
@@ -992,7 +992,7 @@
     { id: "gc",        label: "10. GC",                matrixLabel: "GC",                  dept: "claim",     sheetName: "GC",                      asIs: true,
       valueHeaderMatch: "Total" },
     { id: "btl",       label: "11. BTL",               matrixLabel: "BTL",                 dept: "claim",     sheetName: "BTL",                     asIs: true,
-      valueHeaderMatch: "Total" },
+      fixedDealerColLetter: "B", fixedValueColLetter: "I", fixedHeaderRow: 1 },
     { id: "lcr",       label: "12. LCR",               matrixLabel: "LCR",                 dept: "claim",     sheetName: "LCR",                     asIs: false,
       valueHeaderMatch: "Amount", combinedKodeDealer: true },
     { id: "kpb",       label: "13. KPB",               matrixLabel: "KPB",                 dept: "claim",     sheetName: "KPB",                     asIs: true,
@@ -1094,6 +1094,15 @@
     return s;
   }
 
+  function letterToColIndex(letter){
+    const s = (letter || "").toString().trim().toUpperCase();
+    let n = 0;
+    for (let i = 0; i < s.length; i++){
+      n = n * 26 + (s.charCodeAt(i) - 64);
+    }
+    return n - 1; // 0-based
+  }
+
   /* ============================================================
      Ambil & parse 1 sheet sumber -> array baris {kode, dealer, value}
      Auto-deteksi baris header (dicari baris yang punya kolom
@@ -1110,6 +1119,19 @@
   function detectColumns(table, cat){
     let headerIdx = -1, kodeIdx = -1, dealerIdx = -1, valueIdx = -1;
     const scanLimit = Math.min(table.length, 25);
+
+    // Pass -1 (prioritas tertinggi): kalau kategori ini dikonfigurasi dgn
+    // kolom TETAP (huruf kolom persis, dikonfirmasi manual oleh user dari
+    // sheet aslinya), langsung pakai itu -> tidak ada tebak-tebakan teks
+    // atau lebar baris sama sekali, jadi tidak mungkin salah asalkan
+    // konfigurasinya benar.
+    if (cat && cat.fixedDealerColLetter && cat.fixedValueColLetter){
+      headerIdx = (cat.fixedHeaderRow || 1) - 1;
+      dealerIdx = letterToColIndex(cat.fixedDealerColLetter);
+      valueIdx = letterToColIndex(cat.fixedValueColLetter);
+      kodeIdx = cat.fixedKodeColLetter ? letterToColIndex(cat.fixedKodeColLetter) : -1;
+      return { headerIdx, kodeIdx, dealerIdx, valueIdx };
+    }
 
     // Header kolom asli itu label pendek ("Dealer", "Kode Dealer", "NAMA
     // DEALER"). Judul section gabungan spt "PEMBAYARAN BONUS DEALER" atau
