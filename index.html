@@ -900,7 +900,7 @@
         <strong>Data Live dari Google Sheets</strong>
         <span>Ditarik otomatis dari 13 kategori (Admin, Claim, Marketing, TSD) setiap kali modal ini dibuka. Klik "Refresh" untuk menarik ulang data terbaru.</span>
         <span class="summary-excel-updated" id="excelUpdatedAt">Terakhir diperbarui: -</span>
-        <span class="summary-build-version">Versi kode: BUILD-2026-07-29-07</span>
+        <span class="summary-build-version">Versi kode: BUILD-2026-07-29-08</span>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <button type="button" class="summary-btn" id="summaryRefreshBtn">⟳ Refresh</button>
@@ -1417,6 +1417,7 @@
       throw new Error("Kolom Dealer/Nama tidak ditemukan di \"" + cat.sheetName + "\" (sudah dicoba parse ulang). Isi baris awal sheet: " + (buildPreview(table) || "(kosong)"));
     }
 
+    const { headerIdx, kodeIdx, dealerIdx, valueIdx } = cols;
     const out = [];
     // Label baris agregat/footer yang HARUS di-skip (bukan dealer sungguhan) --
     // banyak sheet sumber punya baris "TOTAL"/"GRAND TOTAL" di paling bawah
