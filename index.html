@@ -1375,11 +1375,18 @@
     };
 
     const out = [];
+    // Label baris agregat/footer yang HARUS di-skip (bukan dealer sungguhan) --
+    // banyak sheet sumber punya baris "TOTAL"/"GRAND TOTAL" di paling bawah
+    // yg kalau ikut kebaca akan dobel-hitung grand total (nilainya = jumlah
+    // semua dealer, dianggap seolah 1 dealer lagi).
+    const FOOTER_LABELS = /^(total|grand\s*total|jumlah|sub\s*total|subtotal|total\s*keseluruhan)$/i;
+
     for (let i = headerIdx + 1; i < table.length; i++){
       const row = table[i];
       if (!row || row.every(c => (c || "").toString().trim() === "")) continue;
       const rawDealerCell = (row[dealerIdx] || "").toString().trim();
       if (!rawDealerCell) continue;
+      if (FOOTER_LABELS.test(rawDealerCell)) continue;
 
       let dealerName, kode;
       if (cat.combinedKodeDealer){
@@ -1397,6 +1404,7 @@
         kode = kodeIdx > -1 ? (row[kodeIdx] || "").toString().trim() : "";
       }
       if (!dealerName) continue;
+      if (FOOTER_LABELS.test(dealerName)) continue;
       const value = parseSheetNumber(row[valueIdx]);
       out.push({ kode, dealer: dealerName, value });
     }
